@@ -217,7 +217,8 @@ button[type="button"]:hover {
   background: #f9fafb;
 }
 
-.metrics {
+.metrics,
+.cost-panel {
   display: grid;
   gap: 8px;
   margin: 0;
@@ -227,18 +228,21 @@ button[type="button"]:hover {
   background: #fbfcfd;
 }
 
-.metrics div {
+.metrics div,
+.cost-panel div {
   display: flex;
   justify-content: space-between;
   gap: 14px;
 }
 
-.metrics dt {
+.metrics dt,
+.cost-panel dt {
   color: var(--muted);
   font-size: 13px;
 }
 
-.metrics dd {
+.metrics dd,
+.cost-panel dd {
   margin: 0;
   color: var(--text);
   font-size: 13px;

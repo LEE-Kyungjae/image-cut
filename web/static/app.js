@@ -20,6 +20,9 @@ const sourceMetric = document.querySelector("#sourceMetric");
 const cellMetric = document.querySelector("#cellMetric");
 const countMetric = document.querySelector("#countMetric");
 const selectedMetric = document.querySelector("#selectedMetric");
+const requestMetric = document.querySelector("#requestMetric");
+const outputMetric = document.querySelector("#outputMetric");
+const costMetric = document.querySelector("#costMetric");
 const notice = document.querySelector("#notice");
 
 let loadedImage = null;
@@ -56,6 +59,7 @@ controls.forEach((control) => {
     adjustments = new Map();
     selectedKey = "";
     draw();
+    syncCostPanel();
   });
 });
 
@@ -67,6 +71,7 @@ presetButtons.forEach((button) => {
     adjustments = new Map();
     selectedKey = "";
     draw();
+    syncCostPanel();
   });
 });
 
@@ -92,6 +97,8 @@ sampleButton.addEventListener("click", async () => {
 });
 
 providerInput.addEventListener("change", syncProviderUI);
+sizeInput.addEventListener("change", syncCostPanel);
+qualityInput.addEventListener("change", syncCostPanel);
 
 generateButton.addEventListener("click", async () => {
   generateButton.disabled = true;
@@ -411,6 +418,27 @@ function syncProviderUI() {
   generateNote.textContent = openai
     ? "OpenAI는 서버에서 IMAGECUT_OPENAI_ENABLED=true, OPENAI_API_KEY, ALLOW_COST가 모두 맞아야 호출됩니다."
     : "Mock은 OpenAI API를 호출하지 않습니다.";
+  syncCostPanel();
+}
+
+function syncCostPanel() {
+  const opts = readOptions();
+  const openai = providerInput.value === "openai";
+  const cuts = opts.rows * opts.cols;
+  requestMetric.textContent = "1 grid image";
+  outputMetric.textContent = `${cuts} cuts from ${sizeInput.value}`;
+  if (!openai) {
+    costMetric.textContent = "무료 mock";
+    return;
+  }
+  const megapixels = outputMegapixels(sizeInput.value);
+  costMetric.textContent = `실비 과금: GPT-Image-2 image output $30/1M tokens, ${qualityInput.value}, ${megapixels}MP`;
+}
+
+function outputMegapixels(size) {
+  const [w, h] = size.split("x").map((value) => Number.parseInt(value, 10));
+  if (!Number.isFinite(w) || !Number.isFinite(h)) return "auto";
+  return ((w * h) / 1_000_000).toFixed(2);
 }
 
 function drawSampleGrid(sampleCtx, size, opts) {

@@ -13,6 +13,7 @@ Current MVP:
 - Download all cuts as a ZIP.
 - No OpenAI API key is required.
 - Optional OpenAI generation is guarded by explicit environment variables and confirmation text.
+- The UI shows request count, output size, and the current GPT-Image-2 pricing basis before generation.
 
 ## Run
 
@@ -42,6 +43,8 @@ Example:
 ```bash
 OPENAI_API_KEY=... IMAGECUT_OPENAI_ENABLED=true go run ./cmd/server
 ```
+
+The UI displays the GPT-Image-2 pricing basis from OpenAI's public pricing page: text input is priced per 1M tokens, and image output is priced per 1M tokens. The exact final bill depends on OpenAI's token accounting for the generated image, so the app treats the display as a guardrail, not an invoice.
 
 ## Planned
 

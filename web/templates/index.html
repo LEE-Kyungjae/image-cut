@@ -70,6 +70,20 @@
                 </div>
                 <button type="button" id="generateButton">생성</button>
                 <span id="generateNote">Mock은 OpenAI API를 호출하지 않습니다.</span>
+                <dl class="cost-panel" id="costPanel">
+                  <div>
+                    <dt>요청</dt>
+                    <dd id="requestMetric">1 grid</dd>
+                  </div>
+                  <div>
+                    <dt>출력</dt>
+                    <dd id="outputMetric">9 cuts</dd>
+                  </div>
+                  <div>
+                    <dt>비용 상태</dt>
+                    <dd id="costMetric">무료 mock</dd>
+                  </div>
+                </dl>
               </div>
 
               <label class="file-button">
