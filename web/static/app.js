@@ -467,7 +467,8 @@ function renderCutPreviews(cells) {
   for (const cell of cells) {
     const item = existing.get(cell.key) || createCutPreview(cell.key);
     item.classList.toggle("is-selected", cell.key === selectedKey);
-    item.querySelector("span").textContent = `${cell.rect.row + 1},${cell.rect.col + 1} - ${cell.rect.w}x${cell.rect.h}`;
+    item.querySelector("[data-cut-label]").textContent = `${cell.rect.row + 1},${cell.rect.col + 1} - ${cell.rect.w}x${cell.rect.h}`;
+    item.querySelector("[data-download-cut]").onclick = () => downloadCut(cell.rect);
     drawCutPreview(item.querySelector("canvas"), cell.rect);
     nextItems.push(item);
   }
@@ -476,11 +477,14 @@ function renderCutPreviews(cells) {
 }
 
 function createCutPreview(key) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "cut-preview";
-  button.dataset.key = key;
-  button.addEventListener("click", () => {
+  const item = document.createElement("div");
+  item.className = "cut-preview";
+  item.dataset.key = key;
+
+  const selectButton = document.createElement("button");
+  selectButton.type = "button";
+  selectButton.className = "cut-preview-select";
+  selectButton.addEventListener("click", () => {
     selectedKey = key;
     draw();
   });
@@ -488,9 +492,19 @@ function createCutPreview(key) {
   const preview = document.createElement("canvas");
   preview.width = 160;
   preview.height = 160;
+
   const label = document.createElement("span");
-  button.append(preview, label);
-  return button;
+  label.dataset.cutLabel = "";
+  selectButton.append(preview, label);
+
+  const downloadButton = document.createElement("button");
+  downloadButton.type = "button";
+  downloadButton.className = "cut-download";
+  downloadButton.dataset.downloadCut = "";
+  downloadButton.textContent = "저장";
+
+  item.append(selectButton, downloadButton);
+  return item;
 }
 
 function drawCutPreview(target, rect) {
@@ -501,6 +515,56 @@ function drawCutPreview(target, rect) {
 
   const fit = containRect(rect.w, rect.h, target.width, target.height);
   previewCtx.drawImage(loadedImage, rect.x, rect.y, rect.w, rect.h, fit.x, fit.y, fit.w, fit.h);
+}
+
+function downloadCut(rect) {
+  if (!loadedImage) return;
+
+  const output = outputSettings();
+  const cutCanvas = document.createElement("canvas");
+  cutCanvas.width = rect.w;
+  cutCanvas.height = rect.h;
+  const cutCtx = cutCanvas.getContext("2d");
+  if (output.mime === "image/jpeg") {
+    cutCtx.fillStyle = "#ffffff";
+    cutCtx.fillRect(0, 0, cutCanvas.width, cutCanvas.height);
+  }
+  cutCtx.drawImage(loadedImage, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+
+  cutCanvas.toBlob((blob) => {
+    if (!blob) {
+      notice.textContent = "컷 파일을 만들 수 없습니다.";
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `imagecut_r${pad2(rect.row + 1)}_c${pad2(rect.col + 1)}.${output.ext}`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }, output.mime, output.quality);
+}
+
+function outputSettings() {
+  const selected = outputFormatInput.value;
+  if (selected === "jpeg") {
+    return {
+      mime: "image/jpeg",
+      ext: "jpg",
+      quality: clampInt(document.querySelector("#jpegQualityInput").value, 1, 100, 92) / 100,
+    };
+  }
+  return {
+    mime: "image/png",
+    ext: "png",
+    quality: undefined,
+  };
+}
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
 }
 
 function drawInvalidOverlay(imageRect) {

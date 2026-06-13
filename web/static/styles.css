@@ -127,6 +127,16 @@ p {
   cursor: pointer;
 }
 
+.cut-preview .cut-preview-select {
+  display: grid;
+  gap: 6px;
+  justify-self: stretch;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
 .cut-preview.is-selected {
   border-color: #f97316;
   box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.18);
@@ -144,6 +154,15 @@ p {
   font-size: 12px;
   font-weight: 700;
   text-align: center;
+}
+
+.cut-preview .cut-download {
+  justify-self: stretch;
+  border: 1px solid var(--line);
+  background: #fbfcfd;
+  color: #344054;
+  padding: 6px 8px;
+  font-size: 12px;
 }
 
 canvas {
