@@ -27,6 +27,7 @@ const outputMetric = document.querySelector("#outputMetric");
 const costMetric = document.querySelector("#costMetric");
 const cutPreviewGrid = document.querySelector("#cutPreviewGrid");
 const previewSummary = document.querySelector("#previewSummary");
+const rectFields = [...document.querySelectorAll("[data-rect-field]")];
 const notice = document.querySelector("#notice");
 
 let loadedImage = null;
@@ -82,6 +83,10 @@ presetButtons.forEach((button) => {
 
 adjustButtons.forEach((button) => {
   button.addEventListener("click", () => adjustSelected(button.dataset.adjust));
+});
+
+rectFields.forEach((field) => {
+  field.addEventListener("input", applyRectFields);
 });
 
 canvas.addEventListener("pointerdown", (event) => {
@@ -216,6 +221,7 @@ function draw() {
     selectedMetric.textContent = "-";
     cropRectsInput.value = "";
     lastCells = [];
+    syncRectFields([]);
     renderCutPreviews([]);
     return;
   }
@@ -231,6 +237,7 @@ function draw() {
     selectedMetric.textContent = "-";
     cropRectsInput.value = "";
     lastCells = [];
+    syncRectFields([]);
     renderCutPreviews([]);
     notice.textContent = "margin/gutter 값이 이미지 크기보다 큽니다.";
     drawInvalidOverlay(imageRect);
@@ -248,6 +255,7 @@ function draw() {
   cropRectsInput.value = JSON.stringify(cells.map((cell) => cell.rect));
   notice.textContent = makeNotice(opts, grid);
   drawGrid(cells);
+  syncRectFields(cells);
   renderCutPreviews(cells);
 }
 
@@ -404,6 +412,64 @@ function adjustSelected(action) {
 
   adjustments.set(selectedKey, next);
   draw();
+}
+
+function syncRectFields(cells) {
+  const cell = selectedKey ? cells.find((item) => item.key === selectedKey) : null;
+  for (const field of rectFields) {
+    field.disabled = !cell;
+    if (!cell) {
+      field.value = "";
+      continue;
+    }
+    field.value = String(cell.rect[field.dataset.rectField]);
+  }
+}
+
+function applyRectFields() {
+  if (!loadedImage || !selectedKey) return;
+  const base = baseRectForKey(selectedKey);
+  if (!base) return;
+
+  const nextRect = {
+    row: base.row,
+    col: base.col,
+    x: rectFieldValue("x", base.x),
+    y: rectFieldValue("y", base.y),
+    w: rectFieldValue("w", base.w),
+    h: rectFieldValue("h", base.h),
+  };
+  const rect = clampRect(nextRect, loadedImage.width, loadedImage.height);
+  adjustments.set(selectedKey, {
+    dx: rect.x - base.x,
+    dy: rect.y - base.y,
+    dw: rect.w - base.w,
+    dh: rect.h - base.h,
+  });
+  draw();
+}
+
+function rectFieldValue(name, fallback) {
+  const field = rectFields.find((item) => item.dataset.rectField === name);
+  return clampInt(field ? field.value : "", 0, 100000, fallback);
+}
+
+function baseRectForKey(key) {
+  if (!loadedImage) return null;
+  const [row, col] = key.split(",").map((value) => Number.parseInt(value, 10));
+  if (!Number.isFinite(row) || !Number.isFinite(col)) return null;
+
+  const opts = readOptions();
+  const grid = calculateGrid(loadedImage.width, loadedImage.height, opts);
+  if (!grid.valid) return null;
+  return {
+    row,
+    col,
+    x: opts.margin + col * (grid.cellW + opts.gutter),
+    y: opts.margin + row * (grid.cellH + opts.gutter),
+    w: grid.cellW,
+    h: grid.cellH,
+  };
 }
 
 function finishPointerDrag(event) {

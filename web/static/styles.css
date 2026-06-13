@@ -364,10 +364,16 @@ button[type="button"]:hover {
   line-height: 1.4;
 }
 
+.rect-grid,
 .nudge-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.rect-grid input:disabled {
+  background: #f2f4f7;
+  color: #98a2b3;
 }
 
 .nudge-grid button:last-child {

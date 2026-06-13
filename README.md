@@ -11,6 +11,7 @@ Current MVP:
 - Review per-cut thumbnails before downloading the ZIP.
 - Download an individual cut directly from its thumbnail.
 - Select a cell, drag it, resize it with the corner handle, or nudge its crop area before export.
+- Edit selected crop coordinates directly with x/y/w/h pixel inputs.
 - See source size, output count, and per-cell size warnings.
 - Export cuts as original format, PNG, or JPEG with quality control.
 - Download all cuts as a ZIP.
