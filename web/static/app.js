@@ -5,6 +5,9 @@ const controls = [...document.querySelectorAll("[data-grid-control]")];
 const presetButtons = [...document.querySelectorAll("[data-preset]")];
 const adjustButtons = [...document.querySelectorAll("[data-adjust]")];
 const sampleButton = document.querySelector("#sampleButton");
+const exportProjectButton = document.querySelector("#exportProjectButton");
+const importProjectButton = document.querySelector("#importProjectButton");
+const projectInput = document.querySelector("#projectInput");
 const generateButton = document.querySelector("#generateButton");
 const providerInput = document.querySelector("#providerInput");
 const promptInput = document.querySelector("#promptInput");
@@ -143,6 +146,10 @@ sampleButton.addEventListener("click", async () => {
   const file = await createSampleFile(readOptions());
   loadFile(file);
 });
+
+exportProjectButton.addEventListener("click", exportProject);
+importProjectButton.addEventListener("click", () => projectInput.click());
+projectInput.addEventListener("change", importProject);
 
 providerInput.addEventListener("change", syncProviderUI);
 sizeInput.addEventListener("change", syncCostPanel);
@@ -631,6 +638,108 @@ function outputSettings() {
 
 function pad2(value) {
   return String(value).padStart(2, "0");
+}
+
+function exportProject() {
+  const opts = readOptions();
+  const project = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    grid: opts,
+    provider: providerInput.value,
+    prompt: promptInput.value,
+    openai: {
+      model: modelInput.value,
+      size: sizeInput.value,
+      quality: qualityInput.value,
+    },
+    output: {
+      format: outputFormatInput.value,
+      jpegQuality: clampInt(document.querySelector("#jpegQualityInput").value, 1, 100, 92),
+    },
+    cropRects: lastCells.map((cell) => cell.rect),
+  };
+  const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "imagecut_project.json";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function importProject() {
+  const file = projectInput.files && projectInput.files[0];
+  projectInput.value = "";
+  if (!file) return;
+
+  try {
+    const project = JSON.parse(await file.text());
+    applyProject(project);
+    notice.textContent = "설정을 불러왔습니다. 이미지가 다르면 crop 위치를 다시 확인하세요.";
+  } catch {
+    notice.textContent = "설정 JSON을 불러올 수 없습니다.";
+  }
+}
+
+function applyProject(project) {
+  if (!project || project.version !== 1) {
+    throw new Error("unsupported project");
+  }
+
+  if (project.grid) {
+    setField("rows", clampInt(project.grid.rows, 1, 8, 3));
+    setField("cols", clampInt(project.grid.cols, 1, 8, 3));
+    setField("margin", Math.max(0, clampInt(project.grid.margin, 0, 100000, 0)));
+    setField("gutter", Math.max(0, clampInt(project.grid.gutter, 0, 100000, 0)));
+  }
+
+  if (typeof project.provider === "string") providerInput.value = project.provider === "openai" ? "openai" : "mock";
+  if (typeof project.prompt === "string") promptInput.value = project.prompt;
+  if (project.openai) {
+    if (typeof project.openai.model === "string") modelInput.value = project.openai.model;
+    if (typeof project.openai.size === "string") sizeInput.value = project.openai.size;
+    if (typeof project.openai.quality === "string") qualityInput.value = project.openai.quality;
+  }
+  if (project.output) {
+    if (["original", "png", "jpeg"].includes(project.output.format)) {
+      outputFormatInput.value = project.output.format;
+    }
+    setField("jpeg_quality", clampInt(project.output.jpegQuality, 1, 100, 92));
+  }
+
+  selectedKey = "";
+  adjustments = new Map();
+  syncProviderUI();
+  syncOutputUI();
+  applyProjectRects(project.cropRects || []);
+  draw();
+}
+
+function applyProjectRects(rects) {
+  if (!loadedImage || !Array.isArray(rects)) return;
+
+  for (const rect of rects) {
+    const key = `${rect.row},${rect.col}`;
+    const base = baseRectForKey(key);
+    if (!base) continue;
+    const clamped = clampRect({
+      row: base.row,
+      col: base.col,
+      x: clampInt(rect.x, 0, 100000, base.x),
+      y: clampInt(rect.y, 0, 100000, base.y),
+      w: clampInt(rect.w, 1, 100000, base.w),
+      h: clampInt(rect.h, 1, 100000, base.h),
+    }, loadedImage.width, loadedImage.height);
+    adjustments.set(key, {
+      dx: clamped.x - base.x,
+      dy: clamped.y - base.y,
+      dw: clamped.w - base.w,
+      dh: clamped.h - base.h,
+    });
+  }
 }
 
 function drawInvalidOverlay(imageRect) {
