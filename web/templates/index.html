@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Imagecut</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="workspace">
+        <div class="titlebar">
+          <div>
+            <h1>Imagecut</h1>
+            <p>그리드 이미지를 행/열 기준으로 잘라 ZIP으로 저장합니다.</p>
+          </div>
+        </div>
+
+        {{if .Error}}
+        <div class="error">{{.Error}}</div>
+        {{end}}
+
+        <form action="/cut" method="post" enctype="multipart/form-data" class="tool">
+          <label class="file-drop">
+            <input type="file" name="image" accept="image/png,image/jpeg" required>
+            <span>PNG/JPEG 업로드</span>
+          </label>
+
+          <div class="controls">
+            <label>
+              Rows
+              <input type="number" name="rows" min="1" max="8" value="3">
+            </label>
+            <label>
+              Cols
+              <input type="number" name="cols" min="1" max="8" value="3">
+            </label>
+            <label>
+              Margin px
+              <input type="number" name="margin" min="0" value="0">
+            </label>
+            <label>
+              Gutter px
+              <input type="number" name="gutter" min="0" value="0">
+            </label>
+          </div>
+
+          <button type="submit">자르고 ZIP 다운로드</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>
