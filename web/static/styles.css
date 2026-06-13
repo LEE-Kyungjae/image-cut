@@ -91,6 +91,61 @@ p {
   aspect-ratio: 4 / 3;
 }
 
+.cut-preview-panel {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / 2;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: #344054;
+  font-size: 14px;
+}
+
+.panel-head span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cut-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+}
+
+.cut-preview {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.cut-preview.is-selected {
+  border-color: #f97316;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.18);
+}
+
+.cut-preview canvas {
+  aspect-ratio: 1 / 1;
+  border-radius: 4px;
+  background: #f8fafc;
+  object-fit: contain;
+}
+
+.cut-preview span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
 canvas {
   display: block;
   width: 100%;
@@ -322,5 +377,9 @@ button[type="button"]:hover {
 
   .split {
     grid-template-columns: 1fr;
+  }
+
+  .cut-preview-panel {
+    grid-column: auto;
   }
 }

@@ -25,6 +25,8 @@ const selectedMetric = document.querySelector("#selectedMetric");
 const requestMetric = document.querySelector("#requestMetric");
 const outputMetric = document.querySelector("#outputMetric");
 const costMetric = document.querySelector("#costMetric");
+const cutPreviewGrid = document.querySelector("#cutPreviewGrid");
+const previewSummary = document.querySelector("#previewSummary");
 const notice = document.querySelector("#notice");
 
 let loadedImage = null;
@@ -214,6 +216,7 @@ function draw() {
     selectedMetric.textContent = "-";
     cropRectsInput.value = "";
     lastCells = [];
+    renderCutPreviews([]);
     return;
   }
 
@@ -228,6 +231,7 @@ function draw() {
     selectedMetric.textContent = "-";
     cropRectsInput.value = "";
     lastCells = [];
+    renderCutPreviews([]);
     notice.textContent = "margin/gutter 값이 이미지 크기보다 큽니다.";
     drawInvalidOverlay(imageRect);
     return;
@@ -244,6 +248,7 @@ function draw() {
   cropRectsInput.value = JSON.stringify(cells.map((cell) => cell.rect));
   notice.textContent = makeNotice(opts, grid);
   drawGrid(cells);
+  renderCutPreviews(cells);
 }
 
 function containRect(srcW, srcH, dstW, dstH) {
@@ -448,6 +453,54 @@ function updateCursor(event) {
     return;
   }
   canvas.style.cursor = hit.mode === "resize" ? "nwse-resize" : "move";
+}
+
+function renderCutPreviews(cells) {
+  if (!loadedImage || cells.length === 0) {
+    previewSummary.textContent = "이미지 없음";
+    cutPreviewGrid.replaceChildren();
+    return;
+  }
+
+  const existing = new Map([...cutPreviewGrid.querySelectorAll(".cut-preview")].map((item) => [item.dataset.key, item]));
+  const nextItems = [];
+  for (const cell of cells) {
+    const item = existing.get(cell.key) || createCutPreview(cell.key);
+    item.classList.toggle("is-selected", cell.key === selectedKey);
+    item.querySelector("span").textContent = `${cell.rect.row + 1},${cell.rect.col + 1} - ${cell.rect.w}x${cell.rect.h}`;
+    drawCutPreview(item.querySelector("canvas"), cell.rect);
+    nextItems.push(item);
+  }
+  cutPreviewGrid.replaceChildren(...nextItems);
+  previewSummary.textContent = `${cells.length} cuts`;
+}
+
+function createCutPreview(key) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "cut-preview";
+  button.dataset.key = key;
+  button.addEventListener("click", () => {
+    selectedKey = key;
+    draw();
+  });
+
+  const preview = document.createElement("canvas");
+  preview.width = 160;
+  preview.height = 160;
+  const label = document.createElement("span");
+  button.append(preview, label);
+  return button;
+}
+
+function drawCutPreview(target, rect) {
+  const previewCtx = target.getContext("2d");
+  previewCtx.clearRect(0, 0, target.width, target.height);
+  previewCtx.fillStyle = "#f8fafc";
+  previewCtx.fillRect(0, 0, target.width, target.height);
+
+  const fit = containRect(rect.w, rect.h, target.width, target.height);
+  previewCtx.drawImage(loadedImage, rect.x, rect.y, rect.w, rect.h, fit.x, fit.y, fit.w, fit.h);
 }
 
 function drawInvalidOverlay(imageRect) {
