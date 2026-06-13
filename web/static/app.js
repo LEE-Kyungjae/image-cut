@@ -8,6 +8,8 @@ const sampleButton = document.querySelector("#sampleButton");
 const exportProjectButton = document.querySelector("#exportProjectButton");
 const importProjectButton = document.querySelector("#importProjectButton");
 const projectInput = document.querySelector("#projectInput");
+const undoButton = document.querySelector("#undoButton");
+const redoButton = document.querySelector("#redoButton");
 const generateButton = document.querySelector("#generateButton");
 const providerInput = document.querySelector("#providerInput");
 const promptInput = document.querySelector("#promptInput");
@@ -39,6 +41,8 @@ let selectedKey = "";
 let adjustments = new Map();
 let lastCells = [];
 let pointerDrag = null;
+let undoStack = [];
+let redoStack = [];
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files && fileInput.files[0];
@@ -65,7 +69,7 @@ fileInput.addEventListener("change", () => {
 
 controls.forEach((control) => {
   control.addEventListener("input", () => {
-    adjustments = new Map();
+    resetAdjustments();
     selectedKey = "";
     draw();
     syncCostPanel();
@@ -77,7 +81,7 @@ presetButtons.forEach((button) => {
     const [rows, cols] = button.dataset.preset.split("x").map((value) => Number.parseInt(value, 10));
     setField("rows", rows);
     setField("cols", cols);
-    adjustments = new Map();
+    resetAdjustments();
     selectedKey = "";
     draw();
     syncCostPanel();
@@ -90,6 +94,30 @@ adjustButtons.forEach((button) => {
 
 rectFields.forEach((field) => {
   field.addEventListener("input", applyRectFields);
+});
+
+undoButton.addEventListener("click", undoCrop);
+redoButton.addEventListener("click", redoCrop);
+
+document.addEventListener("keydown", (event) => {
+  const target = event.target;
+  if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+  if (!(event.metaKey || event.ctrlKey)) return;
+  const key = event.key.toLowerCase();
+  if (key === "z" && event.shiftKey) {
+    event.preventDefault();
+    redoCrop();
+    return;
+  }
+  if (key === "z") {
+    event.preventDefault();
+    undoCrop();
+    return;
+  }
+  if (key === "y") {
+    event.preventDefault();
+    redoCrop();
+  }
 });
 
 canvas.addEventListener("pointerdown", (event) => {
@@ -113,6 +141,7 @@ canvas.addEventListener("pointerdown", (event) => {
     startAdjustment: { ...(adjustments.get(hit.cell.key) || { dx: 0, dy: 0, dw: 0, dh: 0 }) },
     scaleX: loadedImage.width / hit.imageRect.w,
     scaleY: loadedImage.height / hit.imageRect.h,
+    historyBefore: snapshotAdjustments(),
   };
   draw();
 });
@@ -173,11 +202,12 @@ generateButton.addEventListener("click", async () => {
 window.addEventListener("resize", draw);
 syncProviderUI();
 syncOutputUI();
+updateHistoryButtons();
 draw();
 
 function setImage(img) {
   loadedImage = img;
-  adjustments = new Map();
+  resetAdjustments();
   selectedKey = "";
   pointerDrag = null;
   placeholder.hidden = Boolean(img);
@@ -189,6 +219,57 @@ function loadFile(file) {
   transfer.items.add(file);
   fileInput.files = transfer.files;
   fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function resetAdjustments() {
+  adjustments = new Map();
+  undoStack = [];
+  redoStack = [];
+  updateHistoryButtons();
+}
+
+function snapshotAdjustments() {
+  return JSON.stringify([...adjustments.entries()]);
+}
+
+function restoreAdjustments(snapshot) {
+  try {
+    adjustments = new Map(JSON.parse(snapshot));
+  } catch {
+    adjustments = new Map();
+  }
+}
+
+function pushHistory(before) {
+  if (before === snapshotAdjustments()) {
+    updateHistoryButtons();
+    return;
+  }
+  undoStack.push(before);
+  if (undoStack.length > 50) undoStack.shift();
+  redoStack = [];
+  updateHistoryButtons();
+}
+
+function undoCrop() {
+  if (undoStack.length === 0) return;
+  redoStack.push(snapshotAdjustments());
+  restoreAdjustments(undoStack.pop());
+  updateHistoryButtons();
+  draw();
+}
+
+function redoCrop() {
+  if (redoStack.length === 0) return;
+  undoStack.push(snapshotAdjustments());
+  restoreAdjustments(redoStack.pop());
+  updateHistoryButtons();
+  draw();
+}
+
+function updateHistoryButtons() {
+  undoButton.disabled = undoStack.length === 0;
+  redoButton.disabled = redoStack.length === 0;
 }
 
 function readOptions() {
@@ -383,6 +464,7 @@ function adjustSelected(action) {
     return;
   }
   const step = 8;
+  const before = snapshotAdjustments();
   const current = adjustments.get(selectedKey) || { dx: 0, dy: 0, dw: 0, dh: 0 };
   const next = { ...current };
 
@@ -412,12 +494,14 @@ function adjustSelected(action) {
       next.dh -= step * 2;
       break;
     case "reset":
+      pushHistory(before);
       adjustments.delete(selectedKey);
       draw();
       return;
   }
 
   adjustments.set(selectedKey, next);
+  pushHistory(before);
   draw();
 }
 
@@ -447,12 +531,14 @@ function applyRectFields() {
     h: rectFieldValue("h", base.h),
   };
   const rect = clampRect(nextRect, loadedImage.width, loadedImage.height);
+  const before = snapshotAdjustments();
   adjustments.set(selectedKey, {
     dx: rect.x - base.x,
     dy: rect.y - base.y,
     dw: rect.w - base.w,
     dh: rect.h - base.h,
   });
+  pushHistory(before);
   draw();
 }
 
@@ -484,6 +570,7 @@ function finishPointerDrag(event) {
   if (canvas.hasPointerCapture(event.pointerId)) {
     canvas.releasePointerCapture(event.pointerId);
   }
+  pushHistory(pointerDrag.historyBefore);
   pointerDrag = null;
   updateCursor(event);
 }
@@ -712,6 +799,9 @@ function applyProject(project) {
 
   selectedKey = "";
   adjustments = new Map();
+  undoStack = [];
+  redoStack = [];
+  updateHistoryButtons();
   syncProviderUI();
   syncOutputUI();
   applyProjectRects(project.cropRects || []);
