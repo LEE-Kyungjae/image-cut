@@ -30,6 +30,7 @@ let loadedUrl = "";
 let selectedKey = "";
 let adjustments = new Map();
 let lastCells = [];
+let pointerDrag = null;
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files && fileInput.files[0];
@@ -79,17 +80,55 @@ adjustButtons.forEach((button) => {
   button.addEventListener("click", () => adjustSelected(button.dataset.adjust));
 });
 
-canvas.addEventListener("click", (event) => {
+canvas.addEventListener("pointerdown", (event) => {
   if (!loadedImage) return;
-  const rect = canvas.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
-  const hit = lastCells.find((cell) => {
-    return x >= cell.view.x && x <= cell.view.x + cell.view.w && y >= cell.view.y && y <= cell.view.y + cell.view.h;
-  });
-  selectedKey = hit ? hit.key : "";
+  const point = canvasPoint(event);
+  const hit = hitTest(point.x, point.y);
+  selectedKey = hit ? hit.cell.key : "";
+  if (!hit) {
+    pointerDrag = null;
+    draw();
+    return;
+  }
+
+  canvas.setPointerCapture(event.pointerId);
+  pointerDrag = {
+    pointerId: event.pointerId,
+    key: hit.cell.key,
+    mode: hit.mode,
+    startX: point.x,
+    startY: point.y,
+    startAdjustment: { ...(adjustments.get(hit.cell.key) || { dx: 0, dy: 0, dw: 0, dh: 0 }) },
+    scaleX: loadedImage.width / hit.imageRect.w,
+    scaleY: loadedImage.height / hit.imageRect.h,
+  };
   draw();
 });
+
+canvas.addEventListener("pointermove", (event) => {
+  if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) {
+    updateCursor(event);
+    return;
+  }
+
+  const point = canvasPoint(event);
+  const dx = Math.round((point.x - pointerDrag.startX) * pointerDrag.scaleX);
+  const dy = Math.round((point.y - pointerDrag.startY) * pointerDrag.scaleY);
+  const next = { ...pointerDrag.startAdjustment };
+  if (pointerDrag.mode === "resize") {
+    next.dw += dx;
+    next.dh += dy;
+  } else {
+    next.dx += dx;
+    next.dy += dy;
+  }
+  adjustments.set(pointerDrag.key, next);
+  draw();
+});
+
+canvas.addEventListener("pointerup", finishPointerDrag);
+canvas.addEventListener("pointercancel", finishPointerDrag);
+canvas.addEventListener("pointerleave", updateCursor);
 
 sampleButton.addEventListener("click", async () => {
   const file = await createSampleFile(readOptions());
@@ -122,6 +161,7 @@ function setImage(img) {
   loadedImage = img;
   adjustments = new Map();
   selectedKey = "";
+  pointerDrag = null;
   placeholder.hidden = Boolean(img);
   draw();
 }
@@ -292,9 +332,25 @@ function drawGrid(cells) {
     ctx.strokeRect(cell.view.x, cell.view.y, cell.view.w, cell.view.h);
     ctx.fillStyle = selected ? "rgba(194, 65, 12, 0.9)" : "rgba(15, 118, 110, 0.85)";
     ctx.fillText(`${cell.rect.row + 1},${cell.rect.col + 1}`, cell.view.x + 8, cell.view.y + 8);
+    if (selected) {
+      drawResizeHandle(cell.view);
+    }
   }
 
   ctx.restore();
+}
+
+function drawResizeHandle(view) {
+  const size = handleSize(view);
+  ctx.fillStyle = "#f97316";
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2;
+  ctx.fillRect(view.x + view.w - size, view.y + view.h - size, size, size);
+  ctx.strokeRect(view.x + view.w - size, view.y + view.h - size, size, size);
+}
+
+function handleSize(view) {
+  return Math.max(12, Math.min(22, Math.min(view.w, view.h) * 0.12));
 }
 
 function adjustSelected(action) {
@@ -339,6 +395,55 @@ function adjustSelected(action) {
 
   adjustments.set(selectedKey, next);
   draw();
+}
+
+function finishPointerDrag(event) {
+  if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
+  if (canvas.hasPointerCapture(event.pointerId)) {
+    canvas.releasePointerCapture(event.pointerId);
+  }
+  pointerDrag = null;
+  updateCursor(event);
+}
+
+function canvasPoint(event) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
+}
+
+function hitTest(x, y) {
+  const imageRect = currentImageRect();
+  if (!imageRect) return null;
+  for (let i = lastCells.length - 1; i >= 0; i--) {
+    const cell = lastCells[i];
+    if (x < cell.view.x || x > cell.view.x + cell.view.w || y < cell.view.y || y > cell.view.y + cell.view.h) {
+      continue;
+    }
+    const size = handleSize(cell.view);
+    const inHandle = x >= cell.view.x + cell.view.w - size && y >= cell.view.y + cell.view.h - size;
+    return { cell, mode: inHandle ? "resize" : "move", imageRect };
+  }
+  return null;
+}
+
+function currentImageRect() {
+  if (!loadedImage) return null;
+  const rect = canvas.getBoundingClientRect();
+  return containRect(loadedImage.width, loadedImage.height, rect.width, rect.height);
+}
+
+function updateCursor(event) {
+  if (!loadedImage || pointerDrag) return;
+  const point = canvasPoint(event);
+  const hit = hitTest(point.x, point.y);
+  if (!hit) {
+    canvas.style.cursor = "default";
+    return;
+  }
+  canvas.style.cursor = hit.mode === "resize" ? "nwse-resize" : "move";
 }
 
 function drawInvalidOverlay(imageRect) {

@@ -8,7 +8,7 @@ Current MVP:
 - Generate a local sample grid for API-free testing.
 - Configure rows, columns, margin, and gutter.
 - Preview the grid overlay before cutting.
-- Select a cell and nudge its crop area before export.
+- Select a cell, drag it, resize it with the corner handle, or nudge its crop area before export.
 - See source size, output count, and per-cell size warnings.
 - Download all cuts as a ZIP.
 - No OpenAI API key is required.
@@ -48,5 +48,5 @@ The UI displays the GPT-Image-2 pricing basis from OpenAI's public pricing page:
 
 ## Planned
 
-- Per-cell drag handles for crop adjustment.
 - Cost estimation from a maintained pricing table.
+- Batch export presets and named projects.
