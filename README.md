@@ -6,6 +6,8 @@ Current MVP:
 
 - Upload PNG or JPEG grid images.
 - Configure rows, columns, margin, and gutter.
+- Preview the grid overlay before cutting.
+- See source size, output count, and per-cell size warnings.
 - Download all cuts as a ZIP.
 - No OpenAI API key is required.
 
@@ -25,6 +27,6 @@ go test ./...
 
 ## Planned
 
-- Browser preview before download.
 - Manual crop adjustment per cell.
+- OpenAI image generation mock mode.
 - OpenAI image generation adapter behind explicit cost controls.

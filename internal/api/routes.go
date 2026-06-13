@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,8 +19,9 @@ import (
 )
 
 const maxUploadBytes = 20 << 20
+const maxImagePixels = 25_000_000
 
-var indexTmpl = template.Must(template.ParseFiles("web/templates/index.html"))
+var indexTmpl = template.Must(template.ParseFiles(projectPath("web/templates/index.html")))
 
 type pageData struct {
 	Error string
@@ -28,6 +30,7 @@ type pageData struct {
 func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", handleIndex)
 	mux.HandleFunc("/cut", handleCut)
+	mux.HandleFunc("/healthz", handleHealthz)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 }
 
@@ -41,6 +44,15 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	renderIndex(w, "")
+}
+
+func handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte("ok\n"))
 }
 
 func handleCut(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +76,7 @@ func handleCut(w http.ResponseWriter, r *http.Request) {
 
 	img, format, err := decodeImage(file)
 	if err != nil {
-		renderIndex(w, "PNG 또는 JPEG 이미지만 지원합니다.")
+		renderIndex(w, err.Error())
 		return
 	}
 
@@ -155,10 +167,30 @@ func intField(r *http.Request, name string, fallback int) (int, error) {
 	return parsed, nil
 }
 
-func decodeImage(r io.Reader) (image.Image, string, error) {
+func decodeImage(r io.ReadSeeker) (image.Image, string, error) {
+	config, format, err := image.DecodeConfig(r)
+	if err != nil {
+		return nil, "", fmt.Errorf("PNG 또는 JPEG 이미지만 지원합니다.")
+	}
+	switch format {
+	case "png", "jpeg":
+	default:
+		return nil, "", fmt.Errorf("PNG 또는 JPEG 이미지만 지원합니다.")
+	}
+	if config.Width <= 0 || config.Height <= 0 {
+		return nil, "", fmt.Errorf("이미지 크기를 확인할 수 없습니다.")
+	}
+	if config.Width*config.Height > maxImagePixels {
+		return nil, "", fmt.Errorf("이미지가 너무 큽니다. 최대 25MP까지 지원합니다.")
+	}
+
+	if _, err := r.Seek(0, io.SeekStart); err != nil {
+		return nil, "", fmt.Errorf("이미지를 다시 읽을 수 없습니다.")
+	}
+
 	img, format, err := image.Decode(r)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("PNG 또는 JPEG 이미지만 지원합니다.")
 	}
 	switch format {
 	case "png", "jpeg":
@@ -190,4 +222,24 @@ func sanitizeName(name string) string {
 		return "imagecut"
 	}
 	return b.String()
+}
+
+func projectPath(path string) string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return path
+	}
+
+	for {
+		candidate := filepath.Join(dir, path)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return path
+		}
+		dir = parent
+	}
 }
