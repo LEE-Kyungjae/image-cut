@@ -65,7 +65,8 @@ p {
 
 .tool,
 .split,
-.side-panel {
+.side-panel,
+.output-panel {
   display: grid;
   gap: 18px;
 }
@@ -185,6 +186,17 @@ textarea {
 }
 
 .openai-fields[hidden] {
+  display: none;
+}
+
+.output-panel {
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+#jpegQualityField[hidden] {
   display: none;
 }
 

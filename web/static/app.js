@@ -14,6 +14,8 @@ const qualityInput = document.querySelector("#qualityInput");
 const confirmInput = document.querySelector("#confirmInput");
 const openaiFields = document.querySelector("#openaiFields");
 const generateNote = document.querySelector("#generateNote");
+const outputFormatInput = document.querySelector("#outputFormatInput");
+const jpegQualityField = document.querySelector("#jpegQualityField");
 const cropRectsInput = document.querySelector("#cropRectsInput");
 const placeholder = document.querySelector("#placeholder");
 const sourceMetric = document.querySelector("#sourceMetric");
@@ -138,6 +140,7 @@ sampleButton.addEventListener("click", async () => {
 providerInput.addEventListener("change", syncProviderUI);
 sizeInput.addEventListener("change", syncCostPanel);
 qualityInput.addEventListener("change", syncCostPanel);
+outputFormatInput.addEventListener("change", syncOutputUI);
 
 generateButton.addEventListener("click", async () => {
   generateButton.disabled = true;
@@ -155,6 +158,7 @@ generateButton.addEventListener("click", async () => {
 
 window.addEventListener("resize", draw);
 syncProviderUI();
+syncOutputUI();
 draw();
 
 function setImage(img) {
@@ -538,6 +542,10 @@ function syncCostPanel() {
   }
   const megapixels = outputMegapixels(sizeInput.value);
   costMetric.textContent = `실비 과금: GPT-Image-2 image output $30/1M tokens, ${qualityInput.value}, ${megapixels}MP`;
+}
+
+function syncOutputUI() {
+  jpegQualityField.hidden = outputFormatInput.value !== "jpeg";
 }
 
 function outputMegapixels(size) {

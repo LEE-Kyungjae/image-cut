@@ -47,6 +47,33 @@ func TestHandleCutReturnsZip(t *testing.T) {
 	}
 }
 
+func TestHandleCutCanOutputJPEG(t *testing.T) {
+	body, contentType := multipartBodyWithFields(t, 120, 120, map[string]string{
+		"output_format": "jpeg",
+		"jpeg_quality":  "80",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/cut", body)
+	req.Header.Set("Content-Type", contentType)
+	rec := httptest.NewRecorder()
+
+	handleCut(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	reader, err := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reader.File) != 9 {
+		t.Fatalf("zip entries = %d, want 9", len(reader.File))
+	}
+	if got := reader.File[0].Name; !bytes.HasSuffix([]byte(got), []byte(".jpg")) {
+		t.Fatalf("zip entry name = %q, want .jpg", got)
+	}
+}
+
 func TestHandleCutAcceptsCropRects(t *testing.T) {
 	body, contentType := multipartBodyWithFields(t, 120, 120, map[string]string{
 		"crop_rects": `[{"row":0,"col":0,"x":10,"y":10,"w":25,"h":30}]`,
@@ -155,6 +182,33 @@ func TestCutImageRejectsBadCropRects(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 120, 120))
 	if _, err := cutImage(img, imageprocOptions(3, 3), `not json`); err == nil {
 		t.Fatal("expected JSON error")
+	}
+}
+
+func TestParseOutputOptions(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/cut", nil)
+	req.Form = map[string][]string{
+		"output_format": {"original"},
+	}
+
+	opts, err := parseOutputOptions(req, "png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Format != "png" || opts.Ext != "png" {
+		t.Fatalf("opts = %+v, want png", opts)
+	}
+}
+
+func TestParseOutputOptionsRejectsBadQuality(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/cut", nil)
+	req.Form = map[string][]string{
+		"output_format": {"jpeg"},
+		"jpeg_quality":  {"101"},
+	}
+
+	if _, err := parseOutputOptions(req, "png"); err == nil {
+		t.Fatal("expected jpeg quality error")
 	}
 }
 

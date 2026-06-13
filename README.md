@@ -10,6 +10,7 @@ Current MVP:
 - Preview the grid overlay before cutting.
 - Select a cell, drag it, resize it with the corner handle, or nudge its crop area before export.
 - See source size, output count, and per-cell size warnings.
+- Export cuts as original format, PNG, or JPEG with quality control.
 - Download all cuts as a ZIP.
 - No OpenAI API key is required.
 - Optional OpenAI generation is guarded by explicit environment variables and confirmation text.

@@ -132,6 +132,21 @@
                 </div>
               </dl>
 
+              <div class="output-panel">
+                <label>
+                  Output
+                  <select id="outputFormatInput" name="output_format">
+                    <option value="original" selected>원본 포맷 유지</option>
+                    <option value="png">PNG</option>
+                    <option value="jpeg">JPEG</option>
+                  </select>
+                </label>
+                <label id="jpegQualityField" hidden>
+                  JPEG quality
+                  <input id="jpegQualityInput" type="number" name="jpeg_quality" min="1" max="100" value="92">
+                </label>
+              </div>
+
               <div class="manual-panel">
                 <div class="manual-head">
                   <strong>선택 셀</strong>

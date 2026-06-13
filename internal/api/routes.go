@@ -29,6 +29,12 @@ type pageData struct {
 	Error string
 }
 
+type OutputOptions struct {
+	Format      string
+	Ext         string
+	JPEGQuality int
+}
+
 func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", handleIndex)
 	mux.HandleFunc("/cut", handleCut)
@@ -77,13 +83,19 @@ func handleCut(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	img, format, err := decodeImage(file)
+	img, inputFormat, err := decodeImage(file)
 	if err != nil {
 		renderIndex(w, err.Error())
 		return
 	}
 
 	opts, err := parseOptions(r)
+	if err != nil {
+		renderIndex(w, err.Error())
+		return
+	}
+
+	output, err := parseOutputOptions(r, inputFormat)
 	if err != nil {
 		renderIndex(w, err.Error())
 		return
@@ -98,13 +110,13 @@ func handleCut(w http.ResponseWriter, r *http.Request) {
 	var out bytes.Buffer
 	zw := zip.NewWriter(&out)
 	for _, cut := range cuts {
-		name := fmt.Sprintf("imagecut_r%02d_c%02d.%s", cut.Row+1, cut.Col+1, format)
+		name := fmt.Sprintf("imagecut_r%02d_c%02d.%s", cut.Row+1, cut.Col+1, output.Ext)
 		fw, err := zw.Create(name)
 		if err != nil {
 			renderIndex(w, "ZIP 파일을 만들 수 없습니다.")
 			return
 		}
-		if err := encodeImage(fw, cut.Image, format); err != nil {
+		if err := encodeImage(fw, cut.Image, output); err != nil {
 			renderIndex(w, "잘라낸 이미지를 인코딩할 수 없습니다.")
 			return
 		}
@@ -258,6 +270,30 @@ func cutImage(img image.Image, opts imageproc.GridOptions, cropRects string) ([]
 	return imageproc.CutRects(img, rects)
 }
 
+func parseOutputOptions(r *http.Request, inputFormat string) (OutputOptions, error) {
+	format := strings.TrimSpace(r.FormValue("output_format"))
+	if format == "" || format == "original" {
+		format = inputFormat
+	}
+
+	quality, err := intField(r, "jpeg_quality", 92)
+	if err != nil {
+		return OutputOptions{}, err
+	}
+	if quality < 1 || quality > 100 {
+		return OutputOptions{}, fmt.Errorf("jpeg_quality 값은 1부터 100 사이여야 합니다.")
+	}
+
+	switch format {
+	case "png":
+		return OutputOptions{Format: "png", Ext: "png", JPEGQuality: quality}, nil
+	case "jpeg":
+		return OutputOptions{Format: "jpeg", Ext: "jpg", JPEGQuality: quality}, nil
+	default:
+		return OutputOptions{}, fmt.Errorf("output_format은 original, png, jpeg 중 하나여야 합니다.")
+	}
+}
+
 func intField(r *http.Request, name string, fallback int) (int, error) {
 	value := strings.TrimSpace(r.FormValue(name))
 	if value == "" {
@@ -303,14 +339,14 @@ func decodeImage(r io.ReadSeeker) (image.Image, string, error) {
 	}
 }
 
-func encodeImage(w io.Writer, img image.Image, format string) error {
-	switch format {
+func encodeImage(w io.Writer, img image.Image, opts OutputOptions) error {
+	switch opts.Format {
 	case "png":
 		return png.Encode(w, img)
 	case "jpeg":
-		return jpeg.Encode(w, img, &jpeg.Options{Quality: 92})
+		return jpeg.Encode(w, img, &jpeg.Options{Quality: opts.JPEGQuality})
 	default:
-		return fmt.Errorf("unsupported format: %s", format)
+		return fmt.Errorf("unsupported format: %s", opts.Format)
 	}
 }
 
