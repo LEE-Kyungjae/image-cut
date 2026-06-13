@@ -3,15 +3,21 @@ const ctx = canvas.getContext("2d");
 const fileInput = document.querySelector("#imageInput");
 const controls = [...document.querySelectorAll("[data-grid-control]")];
 const presetButtons = [...document.querySelectorAll("[data-preset]")];
+const adjustButtons = [...document.querySelectorAll("[data-adjust]")];
 const sampleButton = document.querySelector("#sampleButton");
+const cropRectsInput = document.querySelector("#cropRectsInput");
 const placeholder = document.querySelector("#placeholder");
 const sourceMetric = document.querySelector("#sourceMetric");
 const cellMetric = document.querySelector("#cellMetric");
 const countMetric = document.querySelector("#countMetric");
+const selectedMetric = document.querySelector("#selectedMetric");
 const notice = document.querySelector("#notice");
 
 let loadedImage = null;
 let loadedUrl = "";
+let selectedKey = "";
+let adjustments = new Map();
+let lastCells = [];
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files && fileInput.files[0];
@@ -37,7 +43,11 @@ fileInput.addEventListener("change", () => {
 });
 
 controls.forEach((control) => {
-  control.addEventListener("input", draw);
+  control.addEventListener("input", () => {
+    adjustments = new Map();
+    selectedKey = "";
+    draw();
+  });
 });
 
 presetButtons.forEach((button) => {
@@ -45,8 +55,26 @@ presetButtons.forEach((button) => {
     const [rows, cols] = button.dataset.preset.split("x").map((value) => Number.parseInt(value, 10));
     setField("rows", rows);
     setField("cols", cols);
+    adjustments = new Map();
+    selectedKey = "";
     draw();
   });
+});
+
+adjustButtons.forEach((button) => {
+  button.addEventListener("click", () => adjustSelected(button.dataset.adjust));
+});
+
+canvas.addEventListener("click", (event) => {
+  if (!loadedImage) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  const hit = lastCells.find((cell) => {
+    return x >= cell.view.x && x <= cell.view.x + cell.view.w && y >= cell.view.y && y <= cell.view.y + cell.view.h;
+  });
+  selectedKey = hit ? hit.key : "";
+  draw();
 });
 
 sampleButton.addEventListener("click", async () => {
@@ -62,6 +90,8 @@ draw();
 
 function setImage(img) {
   loadedImage = img;
+  adjustments = new Map();
+  selectedKey = "";
   placeholder.hidden = Boolean(img);
   draw();
 }
@@ -100,6 +130,9 @@ function draw() {
   if (!loadedImage) {
     sourceMetric.textContent = "-";
     cellMetric.textContent = "-";
+    selectedMetric.textContent = "-";
+    cropRectsInput.value = "";
+    lastCells = [];
     return;
   }
 
@@ -111,14 +144,25 @@ function draw() {
 
   if (!grid.valid) {
     cellMetric.textContent = "계산 불가";
+    selectedMetric.textContent = "-";
+    cropRectsInput.value = "";
+    lastCells = [];
     notice.textContent = "margin/gutter 값이 이미지 크기보다 큽니다.";
     drawInvalidOverlay(imageRect);
     return;
   }
 
+  const cells = buildCells(imageRect, loadedImage, grid, opts);
+  lastCells = cells;
+  if (selectedKey && !cells.some((cell) => cell.key === selectedKey)) {
+    selectedKey = "";
+  }
+
   cellMetric.textContent = `${grid.cellW} x ${grid.cellH}`;
+  selectedMetric.textContent = selectedKey ? selectedKey.replace(",", " / ") : "캔버스에서 선택";
+  cropRectsInput.value = JSON.stringify(cells.map((cell) => cell.rect));
   notice.textContent = makeNotice(opts, grid);
-  drawGrid(imageRect, loadedImage, grid, opts);
+  drawGrid(cells);
 }
 
 function containRect(srcW, srcH, dstW, dstH) {
@@ -149,10 +193,52 @@ function calculateGrid(width, height, opts) {
   return { valid: true, cellW, cellH };
 }
 
-function drawGrid(imageRect, img, grid, opts) {
+function buildCells(imageRect, img, grid, opts) {
   const sx = imageRect.w / img.width;
   const sy = imageRect.h / img.height;
+  const cells = [];
+  const maxW = img.width;
+  const maxH = img.height;
 
+  for (let row = 0; row < opts.rows; row++) {
+    for (let col = 0; col < opts.cols; col++) {
+      const key = `${row},${col}`;
+      const adjustment = adjustments.get(key) || { dx: 0, dy: 0, dw: 0, dh: 0 };
+      const baseX = opts.margin + col * (grid.cellW + opts.gutter);
+      const baseY = opts.margin + row * (grid.cellH + opts.gutter);
+      const rect = clampRect({
+        row,
+        col,
+        x: baseX + adjustment.dx,
+        y: baseY + adjustment.dy,
+        w: grid.cellW + adjustment.dw,
+        h: grid.cellH + adjustment.dh,
+      }, maxW, maxH);
+      cells.push({
+        key,
+        rect,
+        view: {
+          x: imageRect.x + rect.x * sx,
+          y: imageRect.y + rect.y * sy,
+          w: rect.w * sx,
+          h: rect.h * sy,
+        },
+      });
+    }
+  }
+
+  return cells;
+}
+
+function clampRect(rect, maxW, maxH) {
+  const w = Math.max(8, Math.min(rect.w, maxW));
+  const h = Math.max(8, Math.min(rect.h, maxH));
+  const x = Math.max(0, Math.min(rect.x, maxW - w));
+  const y = Math.max(0, Math.min(rect.y, maxH - h));
+  return { row: rect.row, col: rect.col, x, y, w, h };
+}
+
+function drawGrid(cells) {
   ctx.save();
   ctx.lineWidth = 2;
   ctx.strokeStyle = "#14b8a6";
@@ -160,21 +246,62 @@ function drawGrid(imageRect, img, grid, opts) {
   ctx.font = "600 12px system-ui, sans-serif";
   ctx.textBaseline = "top";
 
-  for (let row = 0; row < opts.rows; row++) {
-    for (let col = 0; col < opts.cols; col++) {
-      const x = imageRect.x + (opts.margin + col * (grid.cellW + opts.gutter)) * sx;
-      const y = imageRect.y + (opts.margin + row * (grid.cellH + opts.gutter)) * sy;
-      const w = grid.cellW * sx;
-      const h = grid.cellH * sy;
-      ctx.fillRect(x, y, w, h);
-      ctx.strokeRect(x, y, w, h);
-      ctx.fillStyle = "rgba(15, 118, 110, 0.85)";
-      ctx.fillText(`${row + 1},${col + 1}`, x + 8, y + 8);
-      ctx.fillStyle = "rgba(20, 184, 166, 0.1)";
-    }
+  for (const cell of cells) {
+    const selected = cell.key === selectedKey;
+    ctx.lineWidth = selected ? 4 : 2;
+    ctx.strokeStyle = selected ? "#f97316" : "#14b8a6";
+    ctx.fillStyle = selected ? "rgba(249, 115, 22, 0.14)" : "rgba(20, 184, 166, 0.1)";
+    ctx.fillRect(cell.view.x, cell.view.y, cell.view.w, cell.view.h);
+    ctx.strokeRect(cell.view.x, cell.view.y, cell.view.w, cell.view.h);
+    ctx.fillStyle = selected ? "rgba(194, 65, 12, 0.9)" : "rgba(15, 118, 110, 0.85)";
+    ctx.fillText(`${cell.rect.row + 1},${cell.rect.col + 1}`, cell.view.x + 8, cell.view.y + 8);
   }
 
   ctx.restore();
+}
+
+function adjustSelected(action) {
+  if (!selectedKey) {
+    notice.textContent = "먼저 캔버스에서 보정할 셀을 선택하세요.";
+    return;
+  }
+  const step = 8;
+  const current = adjustments.get(selectedKey) || { dx: 0, dy: 0, dw: 0, dh: 0 };
+  const next = { ...current };
+
+  switch (action) {
+    case "up":
+      next.dy -= step;
+      break;
+    case "down":
+      next.dy += step;
+      break;
+    case "left":
+      next.dx -= step;
+      break;
+    case "right":
+      next.dx += step;
+      break;
+    case "grow":
+      next.dx -= step;
+      next.dy -= step;
+      next.dw += step * 2;
+      next.dh += step * 2;
+      break;
+    case "shrink":
+      next.dx += step;
+      next.dy += step;
+      next.dw -= step * 2;
+      next.dh -= step * 2;
+      break;
+    case "reset":
+      adjustments.delete(selectedKey);
+      draw();
+      return;
+  }
+
+  adjustments.set(selectedKey, next);
+  draw();
 }
 
 function drawInvalidOverlay(imageRect) {

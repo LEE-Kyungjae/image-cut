@@ -1,6 +1,7 @@
 package api
 
 import (
+	"archive/zip"
 	"bytes"
 	"image"
 	"image/color"
@@ -9,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"imagecut/internal/imageproc"
 )
 
 func TestHealthz(t *testing.T) {
@@ -44,6 +47,29 @@ func TestHandleCutReturnsZip(t *testing.T) {
 	}
 }
 
+func TestHandleCutAcceptsCropRects(t *testing.T) {
+	body, contentType := multipartBodyWithFields(t, 120, 120, map[string]string{
+		"crop_rects": `[{"row":0,"col":0,"x":10,"y":10,"w":25,"h":30}]`,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/cut", body)
+	req.Header.Set("Content-Type", contentType)
+	rec := httptest.NewRecorder()
+
+	handleCut(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	reader, err := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reader.File) != 1 {
+		t.Fatalf("zip entries = %d, want 1", len(reader.File))
+	}
+}
+
 func TestHandleCutRejectsMissingImage(t *testing.T) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
@@ -68,7 +94,36 @@ func TestHandleCutRejectsMissingImage(t *testing.T) {
 	}
 }
 
+func TestCutImageUsesCropRects(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 120, 120))
+
+	cuts, err := cutImage(img, imageprocOptions(3, 3), `[{"row":0,"col":0,"x":10,"y":20,"w":30,"h":40}]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cuts) != 1 {
+		t.Fatalf("len(cuts) = %d, want 1", len(cuts))
+	}
+	if got := cuts[0].Image.Bounds().Dx(); got != 30 {
+		t.Fatalf("width = %d, want 30", got)
+	}
+	if got := cuts[0].Image.Bounds().Dy(); got != 40 {
+		t.Fatalf("height = %d, want 40", got)
+	}
+}
+
+func TestCutImageRejectsBadCropRects(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 120, 120))
+	if _, err := cutImage(img, imageprocOptions(3, 3), `not json`); err == nil {
+		t.Fatal("expected JSON error")
+	}
+}
+
 func multipartBody(t *testing.T, width, height int) (*bytes.Buffer, string) {
+	return multipartBodyWithFields(t, width, height, nil)
+}
+
+func multipartBodyWithFields(t *testing.T, width, height int, extra map[string]string) (*bytes.Buffer, string) {
 	t.Helper()
 
 	var body bytes.Buffer
@@ -95,6 +150,9 @@ func multipartBody(t *testing.T, width, height int) (*bytes.Buffer, string) {
 		"margin": "0",
 		"gutter": "0",
 	}
+	for key, value := range extra {
+		fields[key] = value
+	}
 	for key, value := range fields {
 		if err := writer.WriteField(key, value); err != nil {
 			t.Fatal(err)
@@ -106,4 +164,11 @@ func multipartBody(t *testing.T, width, height int) (*bytes.Buffer, string) {
 	}
 
 	return &body, writer.FormDataContentType()
+}
+
+func imageprocOptions(rows, cols int) imageproc.GridOptions {
+	return imageproc.GridOptions{
+		Rows: rows,
+		Cols: cols,
+	}
 }

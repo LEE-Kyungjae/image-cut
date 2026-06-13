@@ -21,6 +21,7 @@
         {{end}}
 
         <form action="/cut" method="post" enctype="multipart/form-data" class="tool" id="cutForm">
+          <input type="hidden" name="crop_rects" id="cropRectsInput">
           <div class="split">
             <div class="preview-panel">
               <canvas id="previewCanvas" width="960" height="640" aria-label="Grid preview"></canvas>
@@ -73,6 +74,22 @@
                   <dd id="countMetric">9</dd>
                 </div>
               </dl>
+
+              <div class="manual-panel">
+                <div class="manual-head">
+                  <strong>선택 셀</strong>
+                  <span id="selectedMetric">-</span>
+                </div>
+                <div class="nudge-grid">
+                  <button type="button" data-adjust="up">위</button>
+                  <button type="button" data-adjust="down">아래</button>
+                  <button type="button" data-adjust="left">왼쪽</button>
+                  <button type="button" data-adjust="right">오른쪽</button>
+                  <button type="button" data-adjust="shrink">축소</button>
+                  <button type="button" data-adjust="grow">확대</button>
+                  <button type="button" data-adjust="reset">리셋</button>
+                </div>
+              </div>
 
               <div class="notice" id="notice">3x3 또는 2x2가 안정적입니다. 4x4 이상은 컷 해상도가 작아질 수 있습니다.</div>
 

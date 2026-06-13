@@ -3,6 +3,7 @@ package api
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"image"
@@ -86,7 +87,7 @@ func handleCut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cuts, err := imageproc.CutGrid(img, opts)
+	cuts, err := cutImage(img, opts, r.FormValue("crop_rects"))
 	if err != nil {
 		renderIndex(w, err.Error())
 		return
@@ -153,6 +154,19 @@ func parseOptions(r *http.Request) (imageproc.GridOptions, error) {
 		Margin: margin,
 		Gutter: gutter,
 	}, nil
+}
+
+func cutImage(img image.Image, opts imageproc.GridOptions, cropRects string) ([]imageproc.Cut, error) {
+	cropRects = strings.TrimSpace(cropRects)
+	if cropRects == "" {
+		return imageproc.CutGrid(img, opts)
+	}
+
+	var rects []imageproc.CropRect
+	if err := json.Unmarshal([]byte(cropRects), &rects); err != nil {
+		return nil, fmt.Errorf("crop rect JSON이 올바르지 않습니다.")
+	}
+	return imageproc.CutRects(img, rects)
 }
 
 func intField(r *http.Request, name string, fallback int) (int, error) {

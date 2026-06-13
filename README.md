@@ -8,6 +8,7 @@ Current MVP:
 - Generate a local sample grid for API-free testing.
 - Configure rows, columns, margin, and gutter.
 - Preview the grid overlay before cutting.
+- Select a cell and nudge its crop area before export.
 - See source size, output count, and per-cell size warnings.
 - Download all cuts as a ZIP.
 - No OpenAI API key is required.

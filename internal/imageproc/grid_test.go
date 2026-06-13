@@ -44,3 +44,34 @@ func TestCutGridRejectsInvalidOptions(t *testing.T) {
 		t.Fatal("expected margin error")
 	}
 }
+
+func TestCutRects(t *testing.T) {
+	src := image.NewRGBA(image.Rect(0, 0, 100, 80))
+	src.Set(12, 14, color.RGBA{G: 255, A: 255})
+
+	cuts, err := CutRects(src, []CropRect{
+		{Row: 0, Col: 0, X: 10, Y: 12, W: 20, H: 30},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cuts) != 1 {
+		t.Fatalf("len(cuts) = %d, want 1", len(cuts))
+	}
+	if got := cuts[0].Image.Bounds().Dx(); got != 20 {
+		t.Fatalf("width = %d, want 20", got)
+	}
+	if got := cuts[0].Image.Bounds().Dy(); got != 30 {
+		t.Fatalf("height = %d, want 30", got)
+	}
+	if got := cuts[0].Image.At(2, 2); got != (color.RGBA{G: 255, A: 255}) {
+		t.Fatalf("pixel = %v, want green", got)
+	}
+}
+
+func TestCutRectsRejectsOutOfBounds(t *testing.T) {
+	src := image.NewRGBA(image.Rect(0, 0, 100, 80))
+	if _, err := CutRects(src, []CropRect{{Row: 0, Col: 0, X: 90, Y: 70, W: 20, H: 20}}); err == nil {
+		t.Fatal("expected out-of-bounds error")
+	}
+}
