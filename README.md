@@ -5,6 +5,7 @@ Imagecut is a small Go web app for cutting grid images into separate files.
 Current MVP:
 
 - Upload PNG or JPEG grid images.
+- Generate a local sample grid for API-free testing.
 - Configure rows, columns, margin, and gutter.
 - Preview the grid overlay before cutting.
 - See source size, output count, and per-cell size warnings.
@@ -28,5 +29,4 @@ go test ./...
 ## Planned
 
 - Manual crop adjustment per cell.
-- OpenAI image generation mock mode.
 - OpenAI image generation adapter behind explicit cost controls.

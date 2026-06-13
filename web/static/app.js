@@ -2,6 +2,8 @@ const canvas = document.querySelector("#previewCanvas");
 const ctx = canvas.getContext("2d");
 const fileInput = document.querySelector("#imageInput");
 const controls = [...document.querySelectorAll("[data-grid-control]")];
+const presetButtons = [...document.querySelectorAll("[data-preset]")];
+const sampleButton = document.querySelector("#sampleButton");
 const placeholder = document.querySelector("#placeholder");
 const sourceMetric = document.querySelector("#sourceMetric");
 const cellMetric = document.querySelector("#cellMetric");
@@ -38,6 +40,23 @@ controls.forEach((control) => {
   control.addEventListener("input", draw);
 });
 
+presetButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const [rows, cols] = button.dataset.preset.split("x").map((value) => Number.parseInt(value, 10));
+    setField("rows", rows);
+    setField("cols", cols);
+    draw();
+  });
+});
+
+sampleButton.addEventListener("click", async () => {
+  const file = await createSampleFile(readOptions());
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  fileInput.files = transfer.files;
+  fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+});
+
 window.addEventListener("resize", draw);
 draw();
 
@@ -60,6 +79,11 @@ function clampInt(value, min, max, fallback) {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(max, Math.max(min, parsed));
+}
+
+function setField(name, value) {
+  const input = document.querySelector(`[name="${name}"]`);
+  if (input) input.value = String(value);
 }
 
 function draw() {
@@ -172,4 +196,63 @@ function makeNotice(opts, grid) {
     return "4칸 이상 그리드는 시안용으로 적합합니다. 마음에 드는 컷은 나중에 단일 고품질 재생성을 권장합니다.";
   }
   return "현재 설정은 안정적인 컷 크기입니다.";
+}
+
+async function createSampleFile(opts) {
+  const size = 1200;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const sampleCtx = canvas.getContext("2d");
+
+  sampleCtx.fillStyle = "#f8fafc";
+  sampleCtx.fillRect(0, 0, size, size);
+
+  const grid = calculateGrid(size, size, opts);
+  if (!grid.valid) {
+    setField("margin", 24);
+    setField("gutter", 24);
+    opts = readOptions();
+  }
+
+  drawSampleGrid(sampleCtx, size, opts);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  return new File([blob], `imagecut_sample_${opts.rows}x${opts.cols}.png`, { type: "image/png" });
+}
+
+function drawSampleGrid(sampleCtx, size, opts) {
+  const palette = [
+    ["#0f766e", "#ccfbf1"],
+    ["#7c3aed", "#ede9fe"],
+    ["#c2410c", "#ffedd5"],
+    ["#1d4ed8", "#dbeafe"],
+    ["#be123c", "#ffe4e6"],
+    ["#047857", "#d1fae5"],
+    ["#a16207", "#fef3c7"],
+    ["#4338ca", "#e0e7ff"],
+  ];
+  const grid = calculateGrid(size, size, opts);
+
+  sampleCtx.fillStyle = "#ffffff";
+  sampleCtx.fillRect(0, 0, size, size);
+  sampleCtx.font = "700 64px system-ui, sans-serif";
+  sampleCtx.textAlign = "center";
+  sampleCtx.textBaseline = "middle";
+
+  for (let row = 0; row < opts.rows; row++) {
+    for (let col = 0; col < opts.cols; col++) {
+      const index = row * opts.cols + col;
+      const [ink, fill] = palette[index % palette.length];
+      const x = opts.margin + col * (grid.cellW + opts.gutter);
+      const y = opts.margin + row * (grid.cellH + opts.gutter);
+      sampleCtx.fillStyle = fill;
+      sampleCtx.fillRect(x, y, grid.cellW, grid.cellH);
+      sampleCtx.strokeStyle = ink;
+      sampleCtx.lineWidth = 8;
+      sampleCtx.strokeRect(x + 4, y + 4, grid.cellW - 8, grid.cellH - 8);
+      sampleCtx.fillStyle = ink;
+      sampleCtx.fillText(`${row + 1}-${col + 1}`, x + grid.cellW / 2, y + grid.cellH / 2);
+    }
+  }
 }
