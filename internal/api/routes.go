@@ -145,6 +145,20 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		prompt = "mock grid"
 	}
 
+	provider := strings.TrimSpace(r.FormValue("provider"))
+	if provider == "" {
+		provider = "mock"
+	}
+
+	if provider == "openai" {
+		handleOpenAIGenerate(w, r, prompt, opts)
+		return
+	}
+	if provider != "mock" {
+		http.Error(w, "지원하지 않는 생성 provider입니다.", http.StatusBadRequest)
+		return
+	}
+
 	img, err := generator.MockGrid(prompt, opts)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -156,6 +170,46 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	if err := png.Encode(w, img); err != nil {
 		http.Error(w, "이미지를 생성할 수 없습니다.", http.StatusInternalServerError)
 	}
+}
+
+func handleOpenAIGenerate(w http.ResponseWriter, r *http.Request, prompt string, opts imageproc.GridOptions) {
+	if strings.ToLower(os.Getenv("IMAGECUT_OPENAI_ENABLED")) != "true" {
+		http.Error(w, "OpenAI 생성은 기본 비활성화 상태입니다. IMAGECUT_OPENAI_ENABLED=true 설정이 필요합니다.", http.StatusForbidden)
+		return
+	}
+	if r.FormValue("openai_confirm") != "ALLOW_COST" {
+		http.Error(w, "비용 발생 확인 문구 ALLOW_COST가 필요합니다.", http.StatusForbidden)
+		return
+	}
+
+	fullPrompt := buildGridPrompt(prompt, opts)
+	client := generator.OpenAIClient{
+		APIKey:  os.Getenv("OPENAI_API_KEY"),
+		BaseURL: os.Getenv("OPENAI_BASE_URL"),
+	}
+	imageBytes, err := client.GeneratePNG(r.Context(), generator.OpenAIRequest{
+		Prompt:  fullPrompt,
+		Model:   r.FormValue("model"),
+		Size:    r.FormValue("size"),
+		Quality: r.FormValue("quality"),
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Content-Disposition", `inline; filename="imagecut_openai_grid.png"`)
+	_, _ = w.Write(imageBytes)
+}
+
+func buildGridPrompt(prompt string, opts imageproc.GridOptions) string {
+	return fmt.Sprintf(
+		"%s\n\nCreate a clean %dx%d contact sheet. Use equal square cells, clear white gutters, centered complete subjects, and no text or labels. Do not let any subject cross cell boundaries.",
+		prompt,
+		opts.Rows,
+		opts.Cols,
+	)
 }
 
 func renderIndex(w http.ResponseWriter, message string) {

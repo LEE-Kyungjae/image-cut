@@ -31,11 +31,45 @@
             <div class="side-panel">
               <div class="generate-panel">
                 <label>
+                  Provider
+                  <select id="providerInput" name="provider">
+                    <option value="mock" selected>Mock - 무료 로컬 생성</option>
+                    <option value="openai">OpenAI - 비용 발생 가능</option>
+                  </select>
+                </label>
+                <label>
                   Prompt
                   <textarea id="promptInput" name="prompt" rows="3" placeholder="예: 귀여운 로봇 스티커 3x3"></textarea>
                 </label>
-                <button type="button" id="mockGenerateButton">Mock 생성</button>
-                <span>실제 OpenAI API 호출은 비활성화되어 있습니다.</span>
+                <div class="openai-fields" id="openaiFields" hidden>
+                  <label>
+                    Model
+                    <input id="modelInput" name="model" value="gpt-image-2">
+                  </label>
+                  <label>
+                    Size
+                    <select id="sizeInput" name="size">
+                      <option value="1024x1024" selected>1024x1024</option>
+                      <option value="1536x1024">1536x1024</option>
+                      <option value="1024x1536">1024x1536</option>
+                    </select>
+                  </label>
+                  <label>
+                    Quality
+                    <select id="qualityInput" name="quality">
+                      <option value="low" selected>low</option>
+                      <option value="medium">medium</option>
+                      <option value="high">high</option>
+                      <option value="auto">auto</option>
+                    </select>
+                  </label>
+                  <label>
+                    Cost confirm
+                    <input id="confirmInput" name="openai_confirm" placeholder="ALLOW_COST">
+                  </label>
+                </div>
+                <button type="button" id="generateButton">생성</button>
+                <span id="generateNote">Mock은 OpenAI API를 호출하지 않습니다.</span>
               </div>
 
               <label class="file-button">

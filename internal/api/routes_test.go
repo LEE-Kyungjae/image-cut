@@ -89,6 +89,26 @@ func TestHandleGenerateReturnsPNG(t *testing.T) {
 	}
 }
 
+func TestHandleGenerateRejectsOpenAIWhenDisabled(t *testing.T) {
+	body := bytes.NewBufferString("provider=openai&prompt=robot&rows=2&cols=2&openai_confirm=ALLOW_COST")
+	req := httptest.NewRequest(http.MethodPost, "/generate", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	handleGenerate(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestBuildGridPrompt(t *testing.T) {
+	prompt := buildGridPrompt("robot", imageproc.GridOptions{Rows: 3, Cols: 4})
+	if !bytes.Contains([]byte(prompt), []byte("3x4 contact sheet")) {
+		t.Fatalf("prompt = %q, want grid instruction", prompt)
+	}
+}
+
 func TestHandleCutRejectsMissingImage(t *testing.T) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)

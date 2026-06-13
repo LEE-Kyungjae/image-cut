@@ -5,8 +5,15 @@ const controls = [...document.querySelectorAll("[data-grid-control]")];
 const presetButtons = [...document.querySelectorAll("[data-preset]")];
 const adjustButtons = [...document.querySelectorAll("[data-adjust]")];
 const sampleButton = document.querySelector("#sampleButton");
-const mockGenerateButton = document.querySelector("#mockGenerateButton");
+const generateButton = document.querySelector("#generateButton");
+const providerInput = document.querySelector("#providerInput");
 const promptInput = document.querySelector("#promptInput");
+const modelInput = document.querySelector("#modelInput");
+const sizeInput = document.querySelector("#sizeInput");
+const qualityInput = document.querySelector("#qualityInput");
+const confirmInput = document.querySelector("#confirmInput");
+const openaiFields = document.querySelector("#openaiFields");
+const generateNote = document.querySelector("#generateNote");
 const cropRectsInput = document.querySelector("#cropRectsInput");
 const placeholder = document.querySelector("#placeholder");
 const sourceMetric = document.querySelector("#sourceMetric");
@@ -84,21 +91,24 @@ sampleButton.addEventListener("click", async () => {
   loadFile(file);
 });
 
-mockGenerateButton.addEventListener("click", async () => {
-  mockGenerateButton.disabled = true;
-  mockGenerateButton.textContent = "생성 중";
+providerInput.addEventListener("change", syncProviderUI);
+
+generateButton.addEventListener("click", async () => {
+  generateButton.disabled = true;
+  generateButton.textContent = "생성 중";
   try {
-    const file = await generateMockFile();
+    const file = await generateImageFile();
     loadFile(file);
   } catch (error) {
     notice.textContent = error instanceof Error ? error.message : "Mock 이미지를 생성할 수 없습니다.";
   } finally {
-    mockGenerateButton.disabled = false;
-    mockGenerateButton.textContent = "Mock 생성";
+    generateButton.disabled = false;
+    generateButton.textContent = "생성";
   }
 });
 
 window.addEventListener("resize", draw);
+syncProviderUI();
 draw();
 
 function setImage(img) {
@@ -368,14 +378,19 @@ async function createSampleFile(opts) {
   return new File([blob], `imagecut_sample_${opts.rows}x${opts.cols}.png`, { type: "image/png" });
 }
 
-async function generateMockFile() {
+async function generateImageFile() {
   const opts = readOptions();
   const params = new URLSearchParams({
+    provider: providerInput.value,
     prompt: promptInput.value,
     rows: String(opts.rows),
     cols: String(opts.cols),
     margin: String(opts.margin),
     gutter: String(opts.gutter),
+    model: modelInput.value,
+    size: sizeInput.value,
+    quality: qualityInput.value,
+    openai_confirm: confirmInput.value,
   });
   const response = await fetch("/generate", {
     method: "POST",
@@ -383,11 +398,19 @@ async function generateMockFile() {
     body: params,
   });
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error((await response.text()).trim());
   }
 
   const blob = await response.blob();
-  return new File([blob], `imagecut_mock_${opts.rows}x${opts.cols}.png`, { type: "image/png" });
+  return new File([blob], `imagecut_${providerInput.value}_${opts.rows}x${opts.cols}.png`, { type: "image/png" });
+}
+
+function syncProviderUI() {
+  const openai = providerInput.value === "openai";
+  openaiFields.hidden = !openai;
+  generateNote.textContent = openai
+    ? "OpenAI는 서버에서 IMAGECUT_OPENAI_ENABLED=true, OPENAI_API_KEY, ALLOW_COST가 모두 맞아야 호출됩니다."
+    : "Mock은 OpenAI API를 호출하지 않습니다.";
 }
 
 function drawSampleGrid(sampleCtx, size, opts) {

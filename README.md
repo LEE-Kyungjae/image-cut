@@ -12,6 +12,7 @@ Current MVP:
 - See source size, output count, and per-cell size warnings.
 - Download all cuts as a ZIP.
 - No OpenAI API key is required.
+- Optional OpenAI generation is guarded by explicit environment variables and confirmation text.
 
 ## Run
 
@@ -27,7 +28,22 @@ Open http://localhost:8080.
 go test ./...
 ```
 
+## OpenAI generation guard
+
+The app defaults to mock generation. Real OpenAI image generation only runs when all of these are true:
+
+- `OPENAI_API_KEY` is set.
+- `IMAGECUT_OPENAI_ENABLED=true` is set.
+- The request uses `provider=openai`.
+- The form confirmation field is exactly `ALLOW_COST`.
+
+Example:
+
+```bash
+OPENAI_API_KEY=... IMAGECUT_OPENAI_ENABLED=true go run ./cmd/server
+```
+
 ## Planned
 
-- Manual crop adjustment per cell.
-- OpenAI image generation adapter behind explicit cost controls.
+- Per-cell drag handles for crop adjustment.
+- Cost estimation from a maintained pricing table.

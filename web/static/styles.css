@@ -161,6 +161,9 @@ label {
 }
 
 input[type="number"],
+input[type="text"],
+input:not([type]),
+select,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -172,6 +175,16 @@ textarea {
 textarea {
   min-height: 76px;
   resize: vertical;
+}
+
+.openai-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.openai-fields[hidden] {
+  display: none;
 }
 
 button {
