@@ -116,6 +116,21 @@ canvas {
   cursor: pointer;
 }
 
+.generate-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfd;
+}
+
+.generate-panel span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .file-button input {
   width: 100%;
 }
@@ -145,12 +160,18 @@ label {
   font-weight: 600;
 }
 
-input[type="number"] {
+input[type="number"],
+textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 10px 12px;
   font: inherit;
+}
+
+textarea {
+  min-height: 76px;
+  resize: vertical;
 }
 
 button {

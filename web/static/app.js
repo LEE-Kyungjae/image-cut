@@ -5,6 +5,8 @@ const controls = [...document.querySelectorAll("[data-grid-control]")];
 const presetButtons = [...document.querySelectorAll("[data-preset]")];
 const adjustButtons = [...document.querySelectorAll("[data-adjust]")];
 const sampleButton = document.querySelector("#sampleButton");
+const mockGenerateButton = document.querySelector("#mockGenerateButton");
+const promptInput = document.querySelector("#promptInput");
 const cropRectsInput = document.querySelector("#cropRectsInput");
 const placeholder = document.querySelector("#placeholder");
 const sourceMetric = document.querySelector("#sourceMetric");
@@ -79,10 +81,21 @@ canvas.addEventListener("click", (event) => {
 
 sampleButton.addEventListener("click", async () => {
   const file = await createSampleFile(readOptions());
-  const transfer = new DataTransfer();
-  transfer.items.add(file);
-  fileInput.files = transfer.files;
-  fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+  loadFile(file);
+});
+
+mockGenerateButton.addEventListener("click", async () => {
+  mockGenerateButton.disabled = true;
+  mockGenerateButton.textContent = "생성 중";
+  try {
+    const file = await generateMockFile();
+    loadFile(file);
+  } catch (error) {
+    notice.textContent = error instanceof Error ? error.message : "Mock 이미지를 생성할 수 없습니다.";
+  } finally {
+    mockGenerateButton.disabled = false;
+    mockGenerateButton.textContent = "Mock 생성";
+  }
 });
 
 window.addEventListener("resize", draw);
@@ -94,6 +107,13 @@ function setImage(img) {
   selectedKey = "";
   placeholder.hidden = Boolean(img);
   draw();
+}
+
+function loadFile(file) {
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  fileInput.files = transfer.files;
+  fileInput.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 function readOptions() {
@@ -346,6 +366,28 @@ async function createSampleFile(opts) {
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   return new File([blob], `imagecut_sample_${opts.rows}x${opts.cols}.png`, { type: "image/png" });
+}
+
+async function generateMockFile() {
+  const opts = readOptions();
+  const params = new URLSearchParams({
+    prompt: promptInput.value,
+    rows: String(opts.rows),
+    cols: String(opts.cols),
+    margin: String(opts.margin),
+    gutter: String(opts.gutter),
+  });
+  const response = await fetch("/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params,
+  });
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  const blob = await response.blob();
+  return new File([blob], `imagecut_mock_${opts.rows}x${opts.cols}.png`, { type: "image/png" });
 }
 
 function drawSampleGrid(sampleCtx, size, opts) {

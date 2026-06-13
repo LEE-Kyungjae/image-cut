@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"imagecut/internal/generator"
 	"imagecut/internal/imageproc"
 )
 
@@ -31,6 +32,7 @@ type pageData struct {
 func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", handleIndex)
 	mux.HandleFunc("/cut", handleCut)
+	mux.HandleFunc("/generate", handleGenerate)
 	mux.HandleFunc("/healthz", handleHealthz)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 }
@@ -121,6 +123,39 @@ func handleCut(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s_cuts.zip"`, sanitizeName(base)))
 	w.Header().Set("Content-Length", strconv.Itoa(out.Len()))
 	_, _ = w.Write(out.Bytes())
+}
+
+func handleGenerate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+
+	opts, err := parseOptions(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	prompt := strings.TrimSpace(r.FormValue("prompt"))
+	if prompt == "" {
+		prompt = "mock grid"
+	}
+
+	img, err := generator.MockGrid(prompt, opts)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Content-Disposition", `inline; filename="imagecut_mock_grid.png"`)
+	if err := png.Encode(w, img); err != nil {
+		http.Error(w, "이미지를 생성할 수 없습니다.", http.StatusInternalServerError)
+	}
 }
 
 func renderIndex(w http.ResponseWriter, message string) {

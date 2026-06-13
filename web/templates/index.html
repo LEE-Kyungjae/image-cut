@@ -29,6 +29,15 @@
             </div>
 
             <div class="side-panel">
+              <div class="generate-panel">
+                <label>
+                  Prompt
+                  <textarea id="promptInput" name="prompt" rows="3" placeholder="예: 귀여운 로봇 스티커 3x3"></textarea>
+                </label>
+                <button type="button" id="mockGenerateButton">Mock 생성</button>
+                <span>실제 OpenAI API 호출은 비활성화되어 있습니다.</span>
+              </div>
+
               <label class="file-button">
                 <input id="imageInput" type="file" name="image" accept="image/png,image/jpeg" required>
                 <span>이미지 선택</span>

@@ -70,6 +70,25 @@ func TestHandleCutAcceptsCropRects(t *testing.T) {
 	}
 }
 
+func TestHandleGenerateReturnsPNG(t *testing.T) {
+	body := bytes.NewBufferString("prompt=robot&rows=2&cols=2&margin=24&gutter=24")
+	req := httptest.NewRequest(http.MethodPost, "/generate", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	handleGenerate(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "image/png" {
+		t.Fatalf("content-type = %q, want image/png", got)
+	}
+	if !bytes.HasPrefix(rec.Body.Bytes(), []byte{0x89, 'P', 'N', 'G'}) {
+		t.Fatal("expected PNG body")
+	}
+}
+
 func TestHandleCutRejectsMissingImage(t *testing.T) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
