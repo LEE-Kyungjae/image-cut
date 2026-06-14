@@ -3,6 +3,7 @@ package api
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"image"
 	"image/color"
 	"image/png"
@@ -63,6 +64,26 @@ func TestHandleCutReturnsZip(t *testing.T) {
 	if rec.Body.Len() == 0 {
 		t.Fatal("expected zip body")
 	}
+	reader, err := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !zipHasEntry(reader, "manifest.json") {
+		t.Fatal("expected manifest.json")
+	}
+	manifest := readManifest(t, reader)
+	if manifest.Version != 1 {
+		t.Fatalf("manifest version = %d, want 1", manifest.Version)
+	}
+	if manifest.Source.Filename != "grid.png" || manifest.Source.Width != 120 || manifest.Source.Height != 120 {
+		t.Fatalf("manifest source = %+v", manifest.Source)
+	}
+	if manifest.Grid.Rows != 3 || manifest.Grid.Cols != 3 {
+		t.Fatalf("manifest grid = %+v", manifest.Grid)
+	}
+	if len(manifest.Cuts) != 9 {
+		t.Fatalf("manifest cuts = %d, want 9", len(manifest.Cuts))
+	}
 }
 
 func TestHandleCutCanOutputJPEG(t *testing.T) {
@@ -84,11 +105,11 @@ func TestHandleCutCanOutputJPEG(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reader.File) != 9 {
-		t.Fatalf("zip entries = %d, want 9", len(reader.File))
+	if len(reader.File) != 10 {
+		t.Fatalf("zip entries = %d, want 10", len(reader.File))
 	}
-	if got := reader.File[0].Name; !bytes.HasSuffix([]byte(got), []byte(".jpg")) {
-		t.Fatalf("zip entry name = %q, want .jpg", got)
+	if !zipHasEntry(reader, "imagecut_r01_c01.jpg") {
+		t.Fatal("expected jpeg cut entry")
 	}
 }
 
@@ -111,8 +132,8 @@ func TestHandleCutCanBatchOutputPNGAndJPEG(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reader.File) != 18 {
-		t.Fatalf("zip entries = %d, want 18", len(reader.File))
+	if len(reader.File) != 19 {
+		t.Fatalf("zip entries = %d, want 19", len(reader.File))
 	}
 	entries := map[string]bool{}
 	for _, file := range reader.File {
@@ -162,8 +183,16 @@ func TestHandleCutAcceptsCropRects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reader.File) != 1 {
-		t.Fatalf("zip entries = %d, want 1", len(reader.File))
+	if len(reader.File) != 2 {
+		t.Fatalf("zip entries = %d, want 2", len(reader.File))
+	}
+	manifest := readManifest(t, reader)
+	if len(manifest.Cuts) != 1 {
+		t.Fatalf("manifest cuts = %d, want 1", len(manifest.Cuts))
+	}
+	cut := manifest.Cuts[0]
+	if cut.X != 10 || cut.Y != 10 || cut.W != 25 || cut.H != 30 {
+		t.Fatalf("manifest cut = %+v", cut)
 	}
 }
 
@@ -326,6 +355,36 @@ func TestDownloadBaseName(t *testing.T) {
 			}
 		})
 	}
+}
+
+func readManifest(t *testing.T, reader *zip.Reader) ExportManifest {
+	t.Helper()
+	for _, file := range reader.File {
+		if file.Name != "manifest.json" {
+			continue
+		}
+		rc, err := file.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rc.Close()
+		var manifest ExportManifest
+		if err := json.NewDecoder(rc).Decode(&manifest); err != nil {
+			t.Fatal(err)
+		}
+		return manifest
+	}
+	t.Fatal("manifest.json not found")
+	return ExportManifest{}
+}
+
+func zipHasEntry(reader *zip.Reader, name string) bool {
+	for _, file := range reader.File {
+		if file.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func multipartBody(t *testing.T, width, height int) (*bytes.Buffer, string) {

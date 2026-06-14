@@ -20,6 +20,7 @@ Current MVP:
 - See source size, output count, and per-cell size warnings.
 - Export cuts as original format, PNG, or JPEG with quality control.
 - Export PNG and JPEG batches in one ZIP when both formats are needed.
+- Include a `manifest.json` in each ZIP with source, grid, output, and crop metadata.
 - Download all cuts as a ZIP.
 - No OpenAI API key is required.
 - Optional OpenAI generation is guarded by explicit environment variables and confirmation text.

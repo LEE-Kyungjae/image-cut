@@ -7,10 +7,10 @@ import (
 )
 
 type GridOptions struct {
-	Rows   int
-	Cols   int
-	Margin int
-	Gutter int
+	Rows   int `json:"rows"`
+	Cols   int `json:"cols"`
+	Margin int `json:"margin"`
+	Gutter int `json:"gutter"`
 }
 
 type Cut struct {

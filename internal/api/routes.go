@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"imagecut/internal/generator"
@@ -41,6 +42,39 @@ type OutputOptions struct {
 type ExportFormat struct {
 	Dir     string
 	Options OutputOptions
+}
+
+type ExportManifest struct {
+	Version     int                   `json:"version"`
+	ExportedAt  string                `json:"exported_at"`
+	ProjectName string                `json:"project_name,omitempty"`
+	Source      ManifestSource        `json:"source"`
+	Grid        imageproc.GridOptions `json:"grid"`
+	Outputs     []ManifestOutput      `json:"outputs"`
+	Cuts        []ManifestCut         `json:"cuts"`
+}
+
+type ManifestSource struct {
+	Filename string `json:"filename"`
+	Format   string `json:"format"`
+	Width    int    `json:"width"`
+	Height   int    `json:"height"`
+}
+
+type ManifestOutput struct {
+	Dir         string `json:"dir,omitempty"`
+	Format      string `json:"format"`
+	Ext         string `json:"ext"`
+	JPEGQuality int    `json:"jpeg_quality,omitempty"`
+}
+
+type ManifestCut struct {
+	Row int `json:"row"`
+	Col int `json:"col"`
+	X   int `json:"x"`
+	Y   int `json:"y"`
+	W   int `json:"w"`
+	H   int `json:"h"`
 }
 
 func RegisterRoutes(mux *http.ServeMux) {
@@ -129,6 +163,10 @@ func handleCut(w http.ResponseWriter, r *http.Request) {
 
 	var out bytes.Buffer
 	zw := zip.NewWriter(&out)
+	if err := writeManifest(zw, buildManifest(r, header.Filename, inputFormat, img.Bounds(), opts, outputs, cuts)); err != nil {
+		renderIndex(w, "manifest 파일을 만들 수 없습니다.")
+		return
+	}
 	for _, output := range outputs {
 		for _, cut := range cuts {
 			name := cutFilename(output, cut)
@@ -367,6 +405,55 @@ func cutFilename(output ExportFormat, cut imageproc.Cut) string {
 		return name
 	}
 	return output.Dir + "/" + name
+}
+
+func buildManifest(r *http.Request, filename string, inputFormat string, bounds image.Rectangle, opts imageproc.GridOptions, outputs []ExportFormat, cuts []imageproc.Cut) ExportManifest {
+	manifest := ExportManifest{
+		Version:     1,
+		ExportedAt:  time.Now().UTC().Format(time.RFC3339),
+		ProjectName: strings.TrimSpace(r.FormValue("project_name")),
+		Source: ManifestSource{
+			Filename: filepath.Base(filename),
+			Format:   inputFormat,
+			Width:    bounds.Dx(),
+			Height:   bounds.Dy(),
+		},
+		Grid: opts,
+	}
+	for _, output := range outputs {
+		item := ManifestOutput{
+			Dir:         output.Dir,
+			Format:      output.Options.Format,
+			Ext:         output.Options.Ext,
+			JPEGQuality: output.Options.JPEGQuality,
+		}
+		if item.Format != "jpeg" {
+			item.JPEGQuality = 0
+		}
+		manifest.Outputs = append(manifest.Outputs, item)
+	}
+	for _, cut := range cuts {
+		rect := cut.Rect
+		manifest.Cuts = append(manifest.Cuts, ManifestCut{
+			Row: cut.Row,
+			Col: cut.Col,
+			X:   rect.Min.X,
+			Y:   rect.Min.Y,
+			W:   rect.Dx(),
+			H:   rect.Dy(),
+		})
+	}
+	return manifest
+}
+
+func writeManifest(zw *zip.Writer, manifest ExportManifest) error {
+	fw, err := zw.Create("manifest.json")
+	if err != nil {
+		return err
+	}
+	encoder := json.NewEncoder(fw)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(manifest)
 }
 
 func intField(r *http.Request, name string, fallback int) (int, error) {
