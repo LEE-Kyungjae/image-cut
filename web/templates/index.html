@@ -153,6 +153,14 @@
 
               <div class="output-panel">
                 <label>
+                  Export preset
+                  <select id="exportPresetInput" name="export_preset">
+                    <option value="single" selected>선택 형식만</option>
+                    <option value="png_jpeg">PNG + JPEG</option>
+                    <option value="all">원본 + PNG + JPEG</option>
+                  </select>
+                </label>
+                <label>
                   Output
                   <select id="outputFormatInput" name="output_format">
                     <option value="original" selected>원본 포맷 유지</option>
@@ -164,6 +172,20 @@
                   JPEG quality
                   <input id="jpegQualityInput" type="number" name="jpeg_quality" min="1" max="100" value="92">
                 </label>
+                <div class="batch-fields" id="batchFields" hidden>
+                  <label>
+                    <input type="checkbox" name="batch_formats" value="original">
+                    원본
+                  </label>
+                  <label>
+                    <input type="checkbox" name="batch_formats" value="png">
+                    PNG
+                  </label>
+                  <label>
+                    <input type="checkbox" name="batch_formats" value="jpeg">
+                    JPEG
+                  </label>
+                </div>
               </div>
 
               <div class="manual-panel">

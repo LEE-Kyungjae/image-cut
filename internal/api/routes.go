@@ -38,6 +38,11 @@ type OutputOptions struct {
 	JPEGQuality int
 }
 
+type ExportFormat struct {
+	Dir     string
+	Options OutputOptions
+}
+
 func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", handleIndex)
 	mux.HandleFunc("/cut", handleCut)
@@ -110,7 +115,7 @@ func handleCut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	output, err := parseOutputOptions(r, inputFormat)
+	outputs, err := parseExportFormats(r, inputFormat)
 	if err != nil {
 		renderIndex(w, err.Error())
 		return
@@ -124,16 +129,18 @@ func handleCut(w http.ResponseWriter, r *http.Request) {
 
 	var out bytes.Buffer
 	zw := zip.NewWriter(&out)
-	for _, cut := range cuts {
-		name := fmt.Sprintf("imagecut_r%02d_c%02d.%s", cut.Row+1, cut.Col+1, output.Ext)
-		fw, err := zw.Create(name)
-		if err != nil {
-			renderIndex(w, "ZIP 파일을 만들 수 없습니다.")
-			return
-		}
-		if err := encodeImage(fw, cut.Image, output); err != nil {
-			renderIndex(w, "잘라낸 이미지를 인코딩할 수 없습니다.")
-			return
+	for _, output := range outputs {
+		for _, cut := range cuts {
+			name := cutFilename(output, cut)
+			fw, err := zw.Create(name)
+			if err != nil {
+				renderIndex(w, "ZIP 파일을 만들 수 없습니다.")
+				return
+			}
+			if err := encodeImage(fw, cut.Image, output.Options); err != nil {
+				renderIndex(w, "잘라낸 이미지를 인코딩할 수 없습니다.")
+				return
+			}
 		}
 	}
 	if err := zw.Close(); err != nil {
@@ -304,6 +311,62 @@ func parseOutputOptions(r *http.Request, inputFormat string) (OutputOptions, err
 	default:
 		return OutputOptions{}, fmt.Errorf("output_format은 original, png, jpeg 중 하나여야 합니다.")
 	}
+}
+
+func parseExportFormats(r *http.Request, inputFormat string) ([]ExportFormat, error) {
+	batch := r.Form["batch_formats"]
+	if len(batch) == 0 {
+		output, err := parseOutputOptions(r, inputFormat)
+		if err != nil {
+			return nil, err
+		}
+		return []ExportFormat{{Options: output}}, nil
+	}
+
+	quality, err := intField(r, "jpeg_quality", 92)
+	if err != nil {
+		return nil, err
+	}
+	if quality < 1 || quality > 100 {
+		return nil, fmt.Errorf("jpeg_quality 값은 1부터 100 사이여야 합니다.")
+	}
+
+	seen := map[string]bool{}
+	var outputs []ExportFormat
+	for _, raw := range batch {
+		requested := strings.TrimSpace(raw)
+		if requested == "" {
+			continue
+		}
+		if seen[requested] {
+			continue
+		}
+		seen[requested] = true
+		format := requested
+		if requested == "original" {
+			format = inputFormat
+		}
+		switch format {
+		case "png":
+			outputs = append(outputs, ExportFormat{Dir: requested, Options: OutputOptions{Format: "png", Ext: "png", JPEGQuality: quality}})
+		case "jpeg":
+			outputs = append(outputs, ExportFormat{Dir: requested, Options: OutputOptions{Format: "jpeg", Ext: "jpg", JPEGQuality: quality}})
+		default:
+			return nil, fmt.Errorf("batch_formats는 original, png, jpeg 중 하나여야 합니다.")
+		}
+	}
+	if len(outputs) == 0 {
+		return nil, fmt.Errorf("batch_formats를 하나 이상 선택하세요.")
+	}
+	return outputs, nil
+}
+
+func cutFilename(output ExportFormat, cut imageproc.Cut) string {
+	name := fmt.Sprintf("imagecut_r%02d_c%02d.%s", cut.Row+1, cut.Col+1, output.Options.Ext)
+	if output.Dir == "" {
+		return name
+	}
+	return output.Dir + "/" + name
 }
 
 func intField(r *http.Request, name string, fallback int) (int, error) {

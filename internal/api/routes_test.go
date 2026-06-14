@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"imagecut/internal/imageproc"
@@ -88,6 +89,40 @@ func TestHandleCutCanOutputJPEG(t *testing.T) {
 	}
 	if got := reader.File[0].Name; !bytes.HasSuffix([]byte(got), []byte(".jpg")) {
 		t.Fatalf("zip entry name = %q, want .jpg", got)
+	}
+}
+
+func TestHandleCutCanBatchOutputPNGAndJPEG(t *testing.T) {
+	body, contentType := multipartBodyWithFields(t, 120, 120, map[string]string{
+		"batch_formats": "png,jpeg",
+		"jpeg_quality":  "80",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/cut", body)
+	req.Header.Set("Content-Type", contentType)
+	rec := httptest.NewRecorder()
+
+	handleCut(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	reader, err := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reader.File) != 18 {
+		t.Fatalf("zip entries = %d, want 18", len(reader.File))
+	}
+	entries := map[string]bool{}
+	for _, file := range reader.File {
+		entries[file.Name] = true
+	}
+	if !entries["png/imagecut_r01_c01.png"] {
+		t.Fatal("expected png batch entry")
+	}
+	if !entries["jpeg/imagecut_r01_c01.jpg"] {
+		t.Fatal("expected jpeg batch entry")
 	}
 }
 
@@ -247,6 +282,30 @@ func TestParseOutputOptionsRejectsBadQuality(t *testing.T) {
 	}
 }
 
+func TestParseExportFormatsKeepsOriginalFolder(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/cut", nil)
+	req.Form = map[string][]string{
+		"batch_formats": {"original", "png", "jpeg"},
+	}
+
+	outputs, err := parseExportFormats(req, "png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outputs) != 3 {
+		t.Fatalf("outputs = %d, want 3", len(outputs))
+	}
+	if outputs[0].Dir != "original" || outputs[0].Options.Format != "png" {
+		t.Fatalf("original output = %+v", outputs[0])
+	}
+	if outputs[1].Dir != "png" || outputs[1].Options.Format != "png" {
+		t.Fatalf("png output = %+v", outputs[1])
+	}
+	if outputs[2].Dir != "jpeg" || outputs[2].Options.Format != "jpeg" {
+		t.Fatalf("jpeg output = %+v", outputs[2])
+	}
+}
+
 func TestDownloadBaseName(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -301,11 +360,21 @@ func multipartBodyWithFields(t *testing.T, width, height int, extra map[string]s
 		"gutter": "0",
 	}
 	for key, value := range extra {
+		if key == "batch_formats" {
+			continue
+		}
 		fields[key] = value
 	}
 	for key, value := range fields {
 		if err := writer.WriteField(key, value); err != nil {
 			t.Fatal(err)
+		}
+	}
+	if value, ok := extra["batch_formats"]; ok {
+		for _, format := range strings.Split(value, ",") {
+			if err := writer.WriteField("batch_formats", strings.TrimSpace(format)); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 

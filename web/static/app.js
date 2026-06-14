@@ -20,8 +20,11 @@ const qualityInput = document.querySelector("#qualityInput");
 const confirmInput = document.querySelector("#confirmInput");
 const openaiFields = document.querySelector("#openaiFields");
 const generateNote = document.querySelector("#generateNote");
+const exportPresetInput = document.querySelector("#exportPresetInput");
 const outputFormatInput = document.querySelector("#outputFormatInput");
 const jpegQualityField = document.querySelector("#jpegQualityField");
+const batchFields = document.querySelector("#batchFields");
+const batchFormatInputs = [...document.querySelectorAll("[name='batch_formats']")];
 const cropRectsInput = document.querySelector("#cropRectsInput");
 const placeholder = document.querySelector("#placeholder");
 const sourceMetric = document.querySelector("#sourceMetric");
@@ -184,7 +187,12 @@ providerInput.addEventListener("change", syncProviderUI);
 modelInput.addEventListener("input", syncCostPanel);
 sizeInput.addEventListener("change", syncCostPanel);
 qualityInput.addEventListener("change", syncCostPanel);
+exportPresetInput.addEventListener("change", () => {
+  applyBatchPreset();
+  syncOutputUI();
+});
 outputFormatInput.addEventListener("change", syncOutputUI);
+batchFormatInputs.forEach((input) => input.addEventListener("change", syncOutputUI));
 
 generateButton.addEventListener("click", async () => {
   generateButton.disabled = true;
@@ -202,6 +210,7 @@ generateButton.addEventListener("click", async () => {
 
 window.addEventListener("resize", draw);
 syncProviderUI();
+applyBatchPreset();
 syncOutputUI();
 updateHistoryButtons();
 loadPricing();
@@ -736,6 +745,10 @@ function outputSettings() {
   };
 }
 
+function selectedBatchFormats() {
+  return batchFormatInputs.filter((input) => input.checked).map((input) => input.value);
+}
+
 function pad2(value) {
   return String(value).padStart(2, "0");
 }
@@ -755,7 +768,9 @@ function exportProject() {
       quality: qualityInput.value,
     },
     output: {
+      preset: exportPresetInput.value,
       format: outputFormatInput.value,
+      batchFormats: selectedBatchFormats(),
       jpegQuality: clampInt(document.querySelector("#jpegQualityInput").value, 1, 100, 92),
     },
     cropRects: lastCells.map((cell) => cell.rect),
@@ -806,8 +821,18 @@ function applyProject(project) {
     if (typeof project.openai.quality === "string") qualityInput.value = project.openai.quality;
   }
   if (project.output) {
+    if (["single", "png_jpeg", "all"].includes(project.output.preset)) {
+      exportPresetInput.value = project.output.preset;
+    }
     if (["original", "png", "jpeg"].includes(project.output.format)) {
       outputFormatInput.value = project.output.format;
+    }
+    if (Array.isArray(project.output.batchFormats)) {
+      for (const input of batchFormatInputs) {
+        input.checked = project.output.batchFormats.includes(input.value);
+      }
+    } else {
+      applyBatchPreset();
     }
     setField("jpeg_quality", clampInt(project.output.jpegQuality, 1, 100, 92));
   }
@@ -965,7 +990,24 @@ function money(value) {
 }
 
 function syncOutputUI() {
-  jpegQualityField.hidden = outputFormatInput.value !== "jpeg";
+  const batchFormats = selectedBatchFormats();
+  const exportsJPEG = exportPresetInput.value === "single"
+    ? outputFormatInput.value === "jpeg"
+    : batchFormats.includes("jpeg");
+  jpegQualityField.hidden = !exportsJPEG;
+  outputFormatInput.closest("label").hidden = exportPresetInput.value !== "single";
+  batchFields.hidden = exportPresetInput.value === "single";
+}
+
+function applyBatchPreset() {
+  if (exportPresetInput.value === "single") {
+    for (const input of batchFormatInputs) input.checked = false;
+    return;
+  }
+  const formats = exportPresetInput.value === "all" ? ["original", "png", "jpeg"] : ["png", "jpeg"];
+  for (const input of batchFormatInputs) {
+    input.checked = formats.includes(input.value);
+  }
 }
 
 function outputMegapixels(size) {
