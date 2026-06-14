@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"imagecut/internal/api"
@@ -22,8 +25,26 @@ func main() {
 	}
 
 	log.Printf("imagecut server listening on http://localhost%s", addr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
+	errs := make(chan error, 1)
+	go func() {
+		errs <- server.ListenAndServe()
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case err := <-errs:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	case sig := <-stop:
+		log.Printf("received %s, shutting down", sig)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 

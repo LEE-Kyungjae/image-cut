@@ -1,0 +1,9 @@
+.git
+.agents
+.codex
+tmp
+*.zip
+*.log
+node_modules
+dist
+coverage

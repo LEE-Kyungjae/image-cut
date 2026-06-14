@@ -31,10 +31,28 @@ go run ./cmd/server
 
 Open http://localhost:8080.
 
+Or use Make:
+
+```bash
+make run
+```
+
+Or run with Docker:
+
+```bash
+docker compose up --build
+```
+
 ## Test
 
 ```bash
 go test ./...
+```
+
+Full local check:
+
+```bash
+make check
 ```
 
 ## OpenAI generation guard
