@@ -1,5 +1,7 @@
 # Imagecut
 
+[![CI](https://github.com/LEE-Kyungjae/image-cut/actions/workflows/ci.yml/badge.svg)](https://github.com/LEE-Kyungjae/image-cut/actions/workflows/ci.yml)
+
 Imagecut is a small Go web app for cutting grid images into separate files.
 
 Current MVP:
