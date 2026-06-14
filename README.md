@@ -45,6 +45,13 @@ Or run with Docker:
 docker compose up --build
 ```
 
+For Docker with environment variables:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
 ## Test
 
 ```bash
@@ -71,5 +78,14 @@ Example:
 ```bash
 OPENAI_API_KEY=... IMAGECUT_OPENAI_ENABLED=true go run ./cmd/server
 ```
+
+Environment variables:
+
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `ADDR` | `:8080` | HTTP listen address. |
+| `IMAGECUT_OPENAI_ENABLED` | `false` | Must be `true` before the server will call OpenAI. |
+| `OPENAI_API_KEY` | empty | Required only for paid OpenAI generation. |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Optional override for compatible gateways or tests. |
 
 The UI displays the GPT-Image-2 pricing basis from OpenAI's public pricing page through the local `/pricing` JSON endpoint. As of 2026-06-14, GPT-Image-2 image input is $8.00 per 1M tokens, cached image input is $2.00 per 1M tokens, and image output is $30.00 per 1M tokens. Text input is $5.00 per 1M tokens and cached text input is $1.25 per 1M tokens. The exact final bill depends on OpenAI's token accounting for the generated image, so the app treats the display as a guardrail, not an invoice.
