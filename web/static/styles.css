@@ -236,6 +236,13 @@ canvas {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.project-name-field {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfd;
+}
+
 label {
   display: grid;
   gap: 8px;

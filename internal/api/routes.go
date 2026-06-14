@@ -11,13 +11,16 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"imagecut/internal/generator"
 	"imagecut/internal/imageproc"
+	"imagecut/internal/pricing"
 )
 
 const maxUploadBytes = 20 << 20
@@ -39,6 +42,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", handleIndex)
 	mux.HandleFunc("/cut", handleCut)
 	mux.HandleFunc("/generate", handleGenerate)
+	mux.HandleFunc("/pricing", handlePricing)
 	mux.HandleFunc("/healthz", handleHealthz)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 }
@@ -62,6 +66,17 @@ func handleHealthz(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte("ok\n"))
+}
+
+func handlePricing(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err := json.NewEncoder(w).Encode(pricing.Current()); err != nil {
+		http.Error(w, "pricing error", http.StatusInternalServerError)
+	}
 }
 
 func handleCut(w http.ResponseWriter, r *http.Request) {
@@ -126,13 +141,10 @@ func handleCut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	base := strings.TrimSuffix(filepath.Base(header.Filename), filepath.Ext(header.Filename))
-	if base == "" || base == "." {
-		base = "imagecut"
-	}
+	base := downloadBaseName(r.FormValue("project_name"), header.Filename)
 
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s_cuts.zip"`, sanitizeName(base)))
+	w.Header().Set("Content-Disposition", zipContentDisposition(base))
 	w.Header().Set("Content-Length", strconv.Itoa(out.Len()))
 	_, _ = w.Write(out.Bytes())
 }
@@ -350,17 +362,61 @@ func encodeImage(w io.Writer, img image.Image, opts OutputOptions) error {
 	}
 }
 
-func sanitizeName(name string) string {
+func downloadBaseName(projectName, uploadName string) string {
+	base := strings.TrimSpace(projectName)
+	if base == "" {
+		base = strings.TrimSuffix(filepath.Base(uploadName), filepath.Ext(uploadName))
+	}
+	return filenameBase(base)
+}
+
+func filenameBase(name string) string {
 	var b strings.Builder
+	lastUnderscore := false
 	for _, r := range name {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_':
 			b.WriteRune(r)
+			lastUnderscore = false
+		case unicode.IsSpace(r) && !lastUnderscore && b.Len() > 0:
+			b.WriteRune('_')
+			lastUnderscore = true
+		}
+		if b.Len() >= 80 {
+			break
 		}
 	}
-	if b.Len() == 0 {
+	base := strings.Trim(b.String(), "_-")
+	if base == "" {
 		return "imagecut"
 	}
-	return b.String()
+	return base
+}
+
+func asciiFilenameBase(name string) string {
+	var b strings.Builder
+	lastUnderscore := false
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_':
+			b.WriteRune(r)
+			lastUnderscore = false
+		case unicode.IsSpace(r) && !lastUnderscore && b.Len() > 0:
+			b.WriteRune('_')
+			lastUnderscore = true
+		}
+	}
+	base := strings.Trim(b.String(), "_-")
+	if base == "" {
+		return "imagecut"
+	}
+	return base
+}
+
+func zipContentDisposition(base string) string {
+	name := base + "_cuts.zip"
+	fallback := asciiFilenameBase(base) + "_cuts.zip"
+	return fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, fallback, url.PathEscape(name))
 }
 
 func projectPath(path string) string {

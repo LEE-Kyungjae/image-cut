@@ -28,6 +28,23 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
+func TestPricing(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/pricing", nil)
+	rec := httptest.NewRecorder()
+
+	handlePricing(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
+		t.Fatalf("content-type = %q", got)
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"model":"gpt-image-2"`)) {
+		t.Fatalf("body = %s", rec.Body.String())
+	}
+}
+
 func TestHandleCutReturnsZip(t *testing.T) {
 	body, contentType := multipartBody(t, 120, 120)
 	req := httptest.NewRequest(http.MethodPost, "/cut", body)
@@ -71,6 +88,24 @@ func TestHandleCutCanOutputJPEG(t *testing.T) {
 	}
 	if got := reader.File[0].Name; !bytes.HasSuffix([]byte(got), []byte(".jpg")) {
 		t.Fatalf("zip entry name = %q, want .jpg", got)
+	}
+}
+
+func TestHandleCutUsesProjectNameForZipFilename(t *testing.T) {
+	body, contentType := multipartBodyWithFields(t, 120, 120, map[string]string{
+		"project_name": "sticker set",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/cut", body)
+	req.Header.Set("Content-Type", contentType)
+	rec := httptest.NewRecorder()
+
+	handleCut(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Disposition"); got != `attachment; filename="sticker_set_cuts.zip"; filename*=UTF-8''sticker_set_cuts.zip` {
+		t.Fatalf("content-disposition = %q", got)
 	}
 }
 
@@ -209,6 +244,28 @@ func TestParseOutputOptionsRejectsBadQuality(t *testing.T) {
 
 	if _, err := parseOutputOptions(req, "png"); err == nil {
 		t.Fatal("expected jpeg quality error")
+	}
+}
+
+func TestDownloadBaseName(t *testing.T) {
+	tests := []struct {
+		name       string
+		project    string
+		uploadName string
+		want       string
+	}{
+		{name: "project name wins", project: "robot sheet", uploadName: "upload.png", want: "robot_sheet"},
+		{name: "upload fallback", project: "", uploadName: "my-grid.png", want: "my-grid"},
+		{name: "unicode kept", project: "스티커 3x3", uploadName: "upload.png", want: "스티커_3x3"},
+		{name: "empty fallback", project: "///", uploadName: "###.png", want: "imagecut"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := downloadBaseName(tt.project, tt.uploadName); got != tt.want {
+				t.Fatalf("downloadBaseName() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

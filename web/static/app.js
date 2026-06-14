@@ -8,6 +8,7 @@ const sampleButton = document.querySelector("#sampleButton");
 const exportProjectButton = document.querySelector("#exportProjectButton");
 const importProjectButton = document.querySelector("#importProjectButton");
 const projectInput = document.querySelector("#projectInput");
+const projectNameInput = document.querySelector("#projectNameInput");
 const undoButton = document.querySelector("#undoButton");
 const redoButton = document.querySelector("#redoButton");
 const generateButton = document.querySelector("#generateButton");
@@ -43,6 +44,7 @@ let lastCells = [];
 let pointerDrag = null;
 let undoStack = [];
 let redoStack = [];
+let pricingTable = null;
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files && fileInput.files[0];
@@ -56,9 +58,7 @@ fileInput.addEventListener("change", () => {
 
   const img = new Image();
   img.onload = () => {
-    loadedImage = img;
-    placeholder.hidden = true;
-    draw();
+    setImage(img);
   };
   img.onerror = () => {
     setImage(null);
@@ -181,6 +181,7 @@ importProjectButton.addEventListener("click", () => projectInput.click());
 projectInput.addEventListener("change", importProject);
 
 providerInput.addEventListener("change", syncProviderUI);
+modelInput.addEventListener("input", syncCostPanel);
 sizeInput.addEventListener("change", syncCostPanel);
 qualityInput.addEventListener("change", syncCostPanel);
 outputFormatInput.addEventListener("change", syncOutputUI);
@@ -203,6 +204,7 @@ window.addEventListener("resize", draw);
 syncProviderUI();
 syncOutputUI();
 updateHistoryButtons();
+loadPricing();
 draw();
 
 function setImage(img) {
@@ -219,6 +221,17 @@ function loadFile(file) {
   transfer.items.add(file);
   fileInput.files = transfer.files;
   fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+async function loadPricing() {
+  try {
+    const response = await fetch("/pricing");
+    if (!response.ok) return;
+    pricingTable = await response.json();
+    syncCostPanel();
+  } catch {
+    pricingTable = null;
+  }
 }
 
 function resetAdjustments() {
@@ -699,7 +712,7 @@ function downloadCut(rect) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `imagecut_r${pad2(rect.row + 1)}_c${pad2(rect.col + 1)}.${output.ext}`;
+    link.download = `${projectFilenameBase()}_r${pad2(rect.row + 1)}_c${pad2(rect.col + 1)}.${output.ext}`;
     document.body.append(link);
     link.click();
     link.remove();
@@ -732,6 +745,7 @@ function exportProject() {
   const project = {
     version: 1,
     savedAt: new Date().toISOString(),
+    name: projectNameInput.value.trim(),
     grid: opts,
     provider: providerInput.value,
     prompt: promptInput.value,
@@ -750,7 +764,7 @@ function exportProject() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "imagecut_project.json";
+  link.download = `${projectFilenameBase()}_project.json`;
   document.body.append(link);
   link.click();
   link.remove();
@@ -783,6 +797,7 @@ function applyProject(project) {
     setField("gutter", Math.max(0, clampInt(project.grid.gutter, 0, 100000, 0)));
   }
 
+  if (typeof project.name === "string") projectNameInput.value = project.name.slice(0, 80);
   if (typeof project.provider === "string") providerInput.value = project.provider === "openai" ? "openai" : "mock";
   if (typeof project.prompt === "string") promptInput.value = project.prompt;
   if (project.openai) {
@@ -830,6 +845,12 @@ function applyProjectRects(rects) {
       dh: clamped.h - base.h,
     });
   }
+}
+
+function projectFilenameBase() {
+  const normalized = projectNameInput.value.trim().replace(/\s+/g, "_");
+  const cleaned = normalized.replace(/[^\p{L}\p{N}_-]+/gu, "");
+  return cleaned || "imagecut";
 }
 
 function drawInvalidOverlay(imageRect) {
@@ -922,8 +943,25 @@ function syncCostPanel() {
     costMetric.textContent = "무료 mock";
     return;
   }
-  const megapixels = outputMegapixels(sizeInput.value);
-  costMetric.textContent = `실비 과금: GPT-Image-2 image output $30/1M tokens, ${qualityInput.value}, ${megapixels}MP`;
+  const price = pricingForModel(modelInput.value);
+  if (!price) {
+    costMetric.textContent = `실비 과금: ${modelInput.value}, ${qualityInput.value}, ${outputMegapixels(sizeInput.value)}MP`;
+    return;
+  }
+  costMetric.textContent = [
+    `${price.currency} image in ${money(price.image.input)}/${price.unit}`,
+    `out ${money(price.image.output)}/${price.unit}`,
+    `${qualityInput.value}, ${outputMegapixels(sizeInput.value)}MP`,
+  ].join(" · ");
+}
+
+function pricingForModel(model) {
+  if (!pricingTable || !Array.isArray(pricingTable.models)) return null;
+  return pricingTable.models.find((item) => item.model === model) || null;
+}
+
+function money(value) {
+  return `$${Number(value).toFixed(2)}`;
 }
 
 function syncOutputUI() {
